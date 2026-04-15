@@ -2,7 +2,8 @@ name: NewsPush Daily
 
 on:
   schedule:
-    - cron: '0 0,6,12,18 * * *'
+    - cron: '0 0 * * *'      # 北京时间每天早上 8:00
+    - cron: '0 6 * * *'      # 北京时间每天下午 14:00
   workflow_dispatch:
     inputs:
       max_analyze:
@@ -20,12 +21,23 @@ jobs:
   newspush:
     runs-on: ubuntu-latest
     
+    # 推荐把 env 写在 job 级别（所有 steps 都能用到）
+    env:
+      DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v6        # 升级到 v6，解决 Node.js 警告
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -39,18 +51,10 @@ jobs:
         run: mkdir -p data results downloads
 
       - name: Run NewsPush
-        env:
-          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}           # ← 必须加上这一行
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          # 如果你后面还会用到 Pexels 和 Pixabay，也加上它们
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: |
-          python main.py --once --analyze ${{ inputs.max_analyze || '5' }}
+          python main.py \
+            --once \
+            --analyze ${{ inputs.max_analyze || '5' }}
 
       - name: Cleanup workspace
         if: always()
