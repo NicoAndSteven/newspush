@@ -1,0 +1,58 @@
+name: NewsPush Daily
+
+on:
+  schedule:
+    - cron: '0 0,6,12,18 * * *'
+  workflow_dispatch:
+    inputs:
+      max_analyze:
+        description: '最多分析多少条新闻'
+        required: false
+        default: '5'
+      no_cleanup:
+        description: '不清理存储'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  newspush:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create necessary directories
+      run: |
+        mkdir -p data results
+    
+    - name: Run NewsPush
+      env:
+        DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+        SMTP_PORT: ${{ secrets.SMTP_PORT }}
+        SMTP_USER: ${{ secrets.SMTP_USER }}
+        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        CLEANUP_AFTER_SEND: ${{ github.event.inputs.no_cleanup != 'true' }}
+        MAX_NEWS_TO_ANALYZE: ${{ github.event.inputs.max_analyze || '5' }}
+      run: |
+        python main.py --once --analyze ${{ github.event.inputs.max_analyze || '5' }}
+    
+    - name: Cleanup workspace
+      if: always()
+      run: |
+        rm -rf data results
+        echo "Workspace cleaned"

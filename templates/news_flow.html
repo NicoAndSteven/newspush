@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}新闻流 - NewsPush{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>🌊 新闻流</h2>
+    <p style="color: #666; margin-bottom: 1rem;">自动滚动显示最新新闻，点击选择生成点评</p>
+    
+    <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
+        <button class="btn" onclick="toggleScroll()" id="scroll-btn">暂停滚动</button>
+        <button class="btn" onclick="loadNews()">刷新</button>
+        <label>
+            速度：
+            <select id="speed" onchange="updateSpeed()">
+                <option value="3000">慢</option>
+                <option value="2000" selected>中</option>
+                <option value="1000">快</option>
+            </select>
+        </label>
+    </div>
+    
+    <div id="news-flow" style="height: 600px; overflow: hidden; position: relative; border: 1px solid #ddd; border-radius: 8px; padding: 1rem;">
+        <div id="news-container" style="position: absolute; width: 100%;">
+            <p style="text-align: center; color: #999;">正在加载新闻...</p>
+        </div>
+    </div>
+</div>
+
+<div id="selected-news" class="card" style="display: none;">
+    <h2>📝 已选新闻</h2>
+    <div id="selected-content"></div>
+    <div style="margin-top: 1rem;">
+        <label>点评风格：
+            <select id="style">
+                <option value="balanced">客观平衡</option>
+                <option value="critical">批判性思维</option>
+                <option value="optimistic">积极乐观</option>
+                <option value="provocative">观点鲜明</option>
+            </select>
+        </label>
+        <button class="btn btn-success" onclick="generateAndPublish()" style="margin-left: 1rem;">生成点评并发布</button>
+    </div>
+    <div id="result" style="margin-top: 1rem;"></div>
+</div>
+
+<style>
+.news-flow-item {
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.news-flow-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.news-flow-item.selected {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let newsItems = [];
+let selectedIndex = -1;
+let scrollInterval = null;
+let scrollSpeed = 2000;
+let isScrolling = true;
+
+async function loadNews() {
+    try {
+        const response = await fetch('/api/news/recent?hours=24');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            newsItems = data.news;
+            renderNews();
+            startScroll();
+        }
+    } catch (error) {
+        console.error('加载失败:', error);
+    }
+}
+
+function renderNews() {
+    const container = document.getElementById('news-container');
+    
+    if (newsItems.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #999;">暂无新闻</p>';
+        return;
+    }
+    
+    let html = '';
+    newsItems.forEach((item, index) => {
+        html += `
+            <div class="news-flow-item" onclick="selectNews(${index})" data-index="${index}">
+                <h3 style="margin-bottom: 0.5rem; font-size: 1rem;">${escapeHtml(item.title)}</h3>
+                <div style="color: #666; font-size: 0.875rem; margin-bottom: 0.5rem;">
+                    <span class="tag">${item.source}</span>
+                    <span class="tag">${item.category}</span>
+                    <span>${new Date(item.published).toLocaleString()}</span>
+                </div>
+                <p style="color: #666; font-size: 0.875rem;">${escapeHtml(item.description.substring(0, 150))}...</p>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function selectNews(index) {
+    selectedIndex = index;
+    
+    // 更新样式
+    document.querySelectorAll('.news-flow-item').forEach((item, i) => {
+        if (i === index) {
+            item.classList.add('selected');
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+    
+    // 显示选中内容
+    const news = newsItems[index];
+    const selectedDiv = document.getElementById('selected-news');
+    const selectedContent = document.getElementById('selected-content');
+    
+    selectedContent.innerHTML = `
+        <h3>${escapeHtml(news.title)}</h3>
+        <p style="color: #666; margin: 0.5rem 0;">来源: ${news.source} | 分类: ${news.category}</p>
+        <p>${escapeHtml(news.description)}</p>
+    `;
+    
+    selectedDiv.style.display = 'block';
+    selectedDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function generateAndPublish() {
+    if (selectedIndex < 0) {
+        alert('请先选择一条新闻');
+        return;
+    }
+    
+    const news = newsItems[selectedIndex];
+    const style = document.getElementById('style').value;
+    const resultDiv = document.getElementById('result');
+    
+    resultDiv.innerHTML = '<div class="loading"></div> 正在生成点评并发布...';
+    
+    try {
+        const response = await fetch('/api/workflow/full', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                news_title: news.title,
+                news_content: news.description,
+                platforms: ['wechat', 'xiaohongshu'],
+                style: style
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <h4>成功!</h4>
+                    <p>任务ID: ${data.workflow.publish_task_id}</p>
+                    <p>已发布到: ${Object.keys(data.workflow.publish_results).join(', ')}</p>
+                </div>
+            `;
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-error">生成失败</div>';
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="alert alert-error">错误: ${error.message}</div>`;
+    }
+}
+
+function startScroll() {
+    if (scrollInterval) clearInterval(scrollInterval);
+    
+    if (!isScrolling) return;
+    
+    const container = document.getElementById('news-container');
+    const flowDiv = document.getElementById('news-flow');
+    
+    scrollInterval = setInterval(() => {
+        const currentTop = parseInt(container.style.top || 0);
+        const maxScroll = container.offsetHeight - flowDiv.offsetHeight;
+        
+        if (Math.abs(currentTop) >= maxScroll) {
+            container.style.top = '0px';
+        } else {
+            container.style.top = (currentTop - 1) + 'px';
+        }
+    }, 50);
+}
+
+function toggleScroll() {
+    isScrolling = !isScrolling;
+    const btn = document.getElementById('scroll-btn');
+    
+    if (isScrolling) {
+        btn.textContent = '暂停滚动';
+        startScroll();
+    } else {
+        btn.textContent = '继续滚动';
+        clearInterval(scrollInterval);
+    }
+}
+
+function updateSpeed() {
+    scrollSpeed = parseInt(document.getElementById('speed').value);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 页面加载
+loadNews();
+</script>
+{% endblock %}

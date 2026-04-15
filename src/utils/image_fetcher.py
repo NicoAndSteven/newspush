@@ -1,0 +1,476 @@
+"""
+智能图片获取模块
+分层配图策略：newspaper3k > OG图 > Wikipedia > Pexels
+"""
+import aiohttp
+import asyncio
+from bs4 import BeautifulSoup
+from typing import List, Optional, Dict
+import os
+import requests
+
+# newspaper3k 导入
+try:
+    from newspaper import Article
+    NEWSPAPER_AVAILABLE = True
+except ImportError:
+    NEWSPAPER_AVAILABLE = False
+    print("[ImageFetcher] newspaper3k 未安装，跳过")
+
+class ImageFetcher:
+    """智能图片获取器"""
+    
+    def __init__(self):
+        self.pexels_api_key = os.getenv("PEXELS_API_KEY", "")
+        self.pixabay_api_key = os.getenv("PIXABAY_API_KEY", "")
+    
+    async def get_article_images(self, news_item: dict, analysis: dict = None) -> List[str]:
+        """
+        获取文章配图（分层策略）
+        
+        优先级：
+        1. newspaper3k 抓取的所有图片
+        2. OG 图（原文配图）
+        3. Wikipedia 图片（人物/地点）
+        4. Pexels 关键词搜索（兜底）
+        
+        Returns:
+            List[str]: 图片URL列表（最多5张）
+        """
+        images = []
+        url = news_item.get("url", "")
+        
+        # 第一优先级：newspaper3k 抓取所有图片
+        if url and NEWSPAPER_AVAILABLE:
+            np_images = await self.extract_newspaper_images(url)
+            if np_images:
+                images.extend(np_images)
+                print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片")
+        
+        # 第二优先级：从原文抓 OG 图（如果newspaper3k没找到）
+        if len(images) < 2 and url:
+            og_image = await self.extract_og_image(url)
+            if og_image and og_image not in images:
+                images.append(og_image)
+                print(f"    [图片] 找到 OG 图")
+        
+        # 第三优先级：Wikipedia 人物/地点图
+        if analysis and len(images) < 3:
+            entities = self._extract_entities(analysis)
+            for entity in entities[:2]:
+                wiki_img = await self.get_wikipedia_image(entity)
+                if wiki_img and wiki_img not in images:
+                    images.append(wiki_img)
+                    print(f"    [图片] 找到 Wikipedia 图: {entity}")
+        
+        # 兜底：Pexels 关键词搜索
+        if len(images) < 2:
+            tags = analysis.get("tags", []) if analysis else []
+            if tags:
+                pexels_imgs = await self.search_pexels(tags[:3])
+                for img in pexels_imgs:
+                    if img not in images:
+                        images.append(img)
+                if pexels_imgs:
+                    print(f"    [图片] 找到 Pexels 图")
+        
+        return images[:5]  # 最多5张
+    
+    async def extract_newspaper_images(self, url: str) -> List[str]:
+        """
+        使用 newspaper3k 抓取文章所有图片
+        
+        Args:
+            url: 新闻原文链接
+        
+        Returns:
+            List[str]: 图片URL列表
+        """
+        if not NEWSPAPER_AVAILABLE:
+            return []
+        
+        try:
+            # 在异步环境中运行同步代码
+            loop = asyncio.get_event_loop()
+            article = Article(url, language='en')
+            
+            # 下载和解析（使用线程池避免阻塞）
+            def parse_article():
+                try:
+                    article.download()
+                    article.parse()
+                    return article.images
+                except Exception as e:
+                    print(f"    [newspaper3k] 解析失败: {e}")
+                    return set()
+            
+            images = await loop.run_in_executor(None, parse_article)
+            
+            # 过滤和返回
+            valid_images = []
+            for img_url in images:
+                # 过滤掉小图标、广告图等
+                if self._is_valid_image_url(img_url):
+                    valid_images.append(img_url)
+            
+            return valid_images[:5]  # 最多5张
+            
+        except Exception as e:
+            print(f"    [newspaper3k] 获取图片失败: {e}")
+            return []
+    
+    def _is_valid_image_url(self, url: str) -> bool:
+        """
+        检查图片URL是否有效（过滤掉小图标、广告等）
+        
+        Args:
+            url: 图片URL
+        
+        Returns:
+            bool: 是否有效
+        """
+        if not url:
+            return False
+        
+        # 过滤掉常见的非内容图片
+        invalid_patterns = [
+            'icon', 'logo', 'avatar', 'button', 'banner',
+            'ad.', 'ads.', 'advertisement', 'tracking',
+            'pixel', 'beacon', 'spacer', 'gif',
+            'facebook.com/tr', 'google-analytics',
+            'doubleclick', 'googlesyndication'
+        ]
+        
+        url_lower = url.lower()
+        for pattern in invalid_patterns:
+            if pattern in url_lower:
+                return False
+        
+        # 只保留常见图片格式
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
+        has_valid_ext = any(url_lower.endswith(ext) for ext in valid_extensions)
+        
+        # 或者URL中包含图片相关路径
+        has_img_path = '/image' in url_lower or '/img' in url_lower or 'cdn' in url_lower
+        
+        return has_valid_ext or has_img_path
+    
+    async def extract_og_image(self, url: str) -> Optional[str]:
+        """
+        从网页提取 OG 图（最相关）
+        
+        Args:
+            url: 新闻原文链接
+        
+        Returns:
+            str: 图片URL 或 None
+        """
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status != 200:
+                        return None
+                    
+                    html = await resp.text()
+                    soup = BeautifulSoup(html, "html.parser")
+                    
+                    # 尝试多种方式提取图片
+                    # 1. og:image
+                    og = soup.find("meta", property="og:image")
+                    if og and og.get("content"):
+                        return og["content"]
+                    
+                    # 2. twitter:image
+                    twitter = soup.find("meta", attrs={"name": "twitter:image"})
+                    if twitter and twitter.get("content"):
+                        return twitter["content"]
+                    
+                    # 3. 第一张图片
+                    img = soup.find("img")
+                    if img and img.get("src"):
+                        src = img["src"]
+                        if src.startswith("http"):
+                            return src
+                        
+        except Exception as e:
+            print(f"    [OG图提取失败] {e}")
+        
+        return None
+    
+    async def get_wikipedia_image(self, entity: str) -> Optional[str]:
+        """
+        从 Wikipedia 获取人物/地点图片
+        
+        Args:
+            entity: 实体名称（如"特朗普"、"匈牙利"）
+        
+        Returns:
+            str: 图片URL 或 None
+        """
+        try:
+            # 尝试英文 Wikipedia
+            url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{entity}"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        thumbnail = data.get("thumbnail", {})
+                        if thumbnail.get("source"):
+                            return thumbnail["source"]
+        
+        except Exception as e:
+            print(f"    [Wikipedia图获取失败] {entity}: {e}")
+        
+        return None
+    
+    async def search_pexels(self, keywords: List[str]) -> List[str]:
+        """
+        使用 Pexels API 搜索图片（关键词搜索，非随机）
+        
+        Args:
+            keywords: 关键词列表（如["匈牙利", "大选"]）
+        
+        Returns:
+            List[str]: 图片URL列表
+        """
+        if not self.pexels_api_key:
+            return []
+        
+        try:
+            # 用关键词搜索，比随机图相关性高
+            query = " ".join(keywords[:2])
+            
+            headers = {"Authorization": self.pexels_api_key}
+            params = {
+                "query": query,
+                "per_page": 3,
+                "orientation": "landscape"
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "https://api.pexels.com/v1/search",
+                    headers=headers,
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        photos = data.get("photos", [])
+                        return [p["src"]["large"] for p in photos]
+        
+        except Exception as e:
+            print(f"    [Pexels搜索失败] {e}")
+        
+        return []
+    
+    def _extract_entities(self, analysis: dict) -> List[str]:
+        """
+        从分析结果中提取实体（人物、地点）
+        
+        Args:
+            analysis: AI 分析结果
+        
+        Returns:
+            List[str]: 实体列表
+        """
+        entities = []
+        
+        # 从标签中提取
+        tags = analysis.get("tags", [])
+        for tag in tags:
+            # 简单判断：大写开头的可能是人名或地名
+            if tag and tag[0].isupper():
+                entities.append(tag)
+        
+        # 从内容类型判断
+        content_type = analysis.get("content_type", "")
+        if "politics" in content_type.lower():
+            # 政治新闻通常涉及人物
+            pass
+        
+        return entities[:3]  # 最多3个实体
+
+# 同步版本（用于非异步环境）
+class ImageFetcherSync:
+    """同步版本的图片获取器"""
+    
+    def __init__(self):
+        self.pexels_api_key = os.getenv("PEXELS_API_KEY", "")
+        self.pixabay_api_key = os.getenv("PIXABAY_API_KEY", "")
+    
+    def get_article_images(self, news_item: dict, analysis: dict = None) -> List[str]:
+        """获取文章配图（同步版本）"""
+        images = []
+        url = news_item.get("url", "")
+        
+        # 第一优先级：newspaper3k 抓取所有图片
+        if url and NEWSPAPER_AVAILABLE:
+            np_images = self.extract_newspaper_images(url)
+            if np_images:
+                images.extend(np_images)
+                print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片")
+        
+        # 第二优先级：OG 图
+        if len(images) < 2 and url:
+            og_image = self.extract_og_image(url)
+            if og_image and og_image not in images:
+                images.append(og_image)
+        
+        # 第三优先级：Wikipedia
+        if analysis and len(images) < 3:
+            entities = self._extract_entities(analysis)
+            for entity in entities[:2]:
+                wiki_img = self.get_wikipedia_image(entity)
+                if wiki_img and wiki_img not in images:
+                    images.append(wiki_img)
+        
+        # 兜底：Pexels
+        if len(images) < 2:
+            tags = analysis.get("tags", []) if analysis else []
+            if tags:
+                pexels_imgs = self.search_pexels(tags[:3])
+                for img in pexels_imgs:
+                    if img not in images:
+                        images.append(img)
+        
+        return images[:5]
+    
+    def extract_newspaper_images(self, url: str) -> List[str]:
+        """
+        使用 newspaper3k 抓取文章所有图片（同步版本）
+        
+        Args:
+            url: 新闻原文链接
+        
+        Returns:
+            List[str]: 图片URL列表
+        """
+        if not NEWSPAPER_AVAILABLE:
+            return []
+        
+        try:
+            article = Article(url, language='en')
+            article.download()
+            article.parse()
+            
+            # 过滤和返回
+            valid_images = []
+            for img_url in article.images:
+                if self._is_valid_image_url(img_url):
+                    valid_images.append(img_url)
+            
+            return valid_images[:5]
+            
+        except Exception as e:
+            print(f"    [newspaper3k] 获取图片失败: {e}")
+            return []
+    
+    def _is_valid_image_url(self, url: str) -> bool:
+        """
+        检查图片URL是否有效（过滤掉小图标、广告等）
+        """
+        if not url:
+            return False
+        
+        invalid_patterns = [
+            'icon', 'logo', 'avatar', 'button', 'banner',
+            'ad.', 'ads.', 'advertisement', 'tracking',
+            'pixel', 'beacon', 'spacer', 'gif',
+            'facebook.com/tr', 'google-analytics',
+            'doubleclick', 'googlesyndication'
+        ]
+        
+        url_lower = url.lower()
+        for pattern in invalid_patterns:
+            if pattern in url_lower:
+                return False
+        
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
+        has_valid_ext = any(url_lower.endswith(ext) for ext in valid_extensions)
+        has_img_path = '/image' in url_lower or '/img' in url_lower or 'cdn' in url_lower
+        
+        return has_valid_ext or has_img_path
+    
+    def extract_og_image(self, url: str) -> Optional[str]:
+        """提取 OG 图（同步版本）"""
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code != 200:
+                return None
+            
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # og:image
+            og = soup.find("meta", property="og:image")
+            if og and og.get("content"):
+                return og["content"]
+            
+            # twitter:image
+            twitter = soup.find("meta", attrs={"name": "twitter:image"})
+            if twitter and twitter.get("content"):
+                return twitter["content"]
+            
+        except Exception as e:
+            print(f"    [OG图提取失败] {e}")
+        
+        return None
+    
+    def get_wikipedia_image(self, entity: str) -> Optional[str]:
+        """获取 Wikipedia 图片（同步版本）"""
+        try:
+            url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{entity}"
+            response = requests.get(url, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                thumbnail = data.get("thumbnail", {})
+                if thumbnail.get("source"):
+                    return thumbnail["source"]
+        
+        except Exception as e:
+            print(f"    [Wikipedia图获取失败] {entity}: {e}")
+        
+        return None
+    
+    def search_pexels(self, keywords: List[str]) -> List[str]:
+        """Pexels 搜索（同步版本）"""
+        if not self.pexels_api_key:
+            return []
+        
+        try:
+            query = " ".join(keywords[:2])
+            
+            headers = {"Authorization": self.pexels_api_key}
+            params = {
+                "query": query,
+                "per_page": 3,
+                "orientation": "landscape"
+            }
+            
+            response = requests.get(
+                "https://api.pexels.com/v1/search",
+                headers=headers,
+                params=params,
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                photos = data.get("photos", [])
+                return [p["src"]["large"] for p in photos]
+        
+        except Exception as e:
+            print(f"    [Pexels搜索失败] {e}")
+        
+        return []
+    
+    def _extract_entities(self, analysis: dict) -> List[str]:
+        """提取实体"""
+        entities = []
+        tags = analysis.get("tags", [])
+        for tag in tags:
+            if tag and tag[0].isupper():
+                entities.append(tag)
+        return entities[:3]

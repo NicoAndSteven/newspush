@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}仪表盘 - NewsPush{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="number" id="stat-news">-</div>
+        <div class="label">24小时新闻</div>
+    </div>
+    <div class="stat-card">
+        <div class="number" id="stat-tasks">-</div>
+        <div class="label">待处理任务</div>
+    </div>
+    <div class="stat-card">
+        <div class="number" id="stat-ai">-</div>
+        <div class="label">AI 状态</div>
+    </div>
+    <div class="stat-card">
+        <div class="number" id="stat-publisher">-</div>
+        <div class="label">发布器状态</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>📈 系统状态</h2>
+    <div id="system-status">
+        <p>正在加载...</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>🚀 快捷操作</h2>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="/news" class="btn">查看新闻</a>
+        <a href="/analysis" class="btn">分析新闻</a>
+        <a href="/publish" class="btn btn-success">发布文章</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>📚 使用指南</h2>
+    <div style="line-height: 2;">
+        <h4>1. 新闻抓取</h4>
+        <p>系统自动从配置的 RSS 源抓取新闻，保存到数据库中。</p>
+        
+        <h4>2. 新闻分析</h4>
+        <p>使用 AI 对新闻进行深度分析，包括：</p>
+        <ul style="margin-left: 1.5rem;">
+            <li>核心要点提取</li>
+            <li>事件背景分析</li>
+            <li>影响评估</li>
+            <li>多平台内容生成</li>
+        </ul>
+        
+        <h4>3. 生成点评</h4>
+        <p>基于分析结果，生成专业的新闻点评文章，支持多种风格。</p>
+        
+        <h4>4. 多平台发布</h4>
+        <p>一键发布到微信公众号、小红书、微博、知乎等平台。</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>🔧 API 端点</h2>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <th style="text-align: left; padding: 0.5rem;">方法</th>
+                <th style="text-align: left; padding: 0.5rem;">端点</th>
+                <th style="text-align: left; padding: 0.5rem;">描述</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 0.5rem;"><code>GET</code></td>
+                <td style="padding: 0.5rem;"><code>/api/news/recent</code></td>
+                <td style="padding: 0.5rem;">获取最近新闻</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 0.5rem;"><code>POST</code></td>
+                <td style="padding: 0.5rem;"><code>/api/news/analyze</code></td>
+                <td style="padding: 0.5rem;">分析新闻</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 0.5rem;"><code>POST</code></td>
+                <td style="padding: 0.5rem;"><code>/api/news/commentary</code></td>
+                <td style="padding: 0.5rem;">生成点评</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 0.5rem;"><code>POST</code></td>
+                <td style="padding: 0.5rem;"><code>/api/news/publish</code></td>
+                <td style="padding: 0.5rem;">发布到多平台</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 0.5rem;"><code>POST</code></td>
+                <td style="padding: 0.5rem;"><code>/api/workflow/full</code></td>
+                <td style="padding: 0.5rem;">完整流程</td>
+            </tr>
+        </tbody>
+    </table>
+    <br>
+    <a href="/docs" target="_blank" class="btn btn-secondary">查看完整 API 文档</a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadStats() {
+    try {
+        const response = await fetch('/api/stats');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            document.getElementById('stat-news').textContent = data.stats.news_24h;
+            document.getElementById('stat-tasks').textContent = data.stats.pending_tasks;
+            document.getElementById('stat-ai').textContent = data.stats.ai_configured ? '✅' : '❌';
+            document.getElementById('stat-publisher').textContent = data.stats.publisher_configured ? '✅' : '❌';
+            
+            // 系统状态
+            const statusDiv = document.getElementById('system-status');
+            let html = '<ul style="line-height: 2;">';
+            html += `<li>🤖 AI 分析器: ${data.stats.ai_configured ? '<span style="color: green;">已配置</span>' : '<span style="color: red;">未配置</span>'}</li>`;
+            html += `<li>📤 发布器: ${data.stats.publisher_configured ? '<span style="color: green;">已配置</span>' : '<span style="color: red;">未配置</span>'}</li>`;
+            html += `<li>📰 24小时新闻: ${data.stats.news_24h} 条</li>`;
+            html += `<li>⏳ 待处理任务: ${data.stats.pending_tasks} 个</li>`;
+            html += '</ul>';
+            statusDiv.innerHTML = html;
+        }
+    } catch (error) {
+        console.error('加载统计数据失败:', error);
+        document.getElementById('system-status').innerHTML = '<p style="color: red;">加载失败</p>';
+    }
+}
+
+// 页面加载时获取数据
+loadStats();
+// 每30秒刷新一次
+setInterval(loadStats, 30000);
+</script>
+{% endblock %}
