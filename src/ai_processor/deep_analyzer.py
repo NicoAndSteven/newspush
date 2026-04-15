@@ -240,7 +240,7 @@ class DeepNewsAnalyzer:
                         
                         print(f"    [API] 正在调用阿里云百炼 API（尝试 {attempt + 1}/{max_retries}）...")
                         response = self.client.chat.completions.create(
-                            model="qwen-plus",
+                            model="qwen3.6-plus",
                             messages=[{"role": "user", "content": prompt}],
                             temperature=0.8,
                             extra_body=extra_body
@@ -462,7 +462,7 @@ class CommentaryGenerator:
                         
                         print(f"    [API] 正在生成点评（尝试 {attempt + 1}/{max_retries}）...")
                         response = self.analyzer.client.chat.completions.create(
-                            model="qwen-plus",
+                            model="qwen3.6-plus",
                             messages=[{"role": "user", "content": prompt}],
                             temperature=0.8,
                             extra_body=extra_body
