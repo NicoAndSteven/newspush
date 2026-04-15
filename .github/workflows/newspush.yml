@@ -54,5 +54,13 @@ jobs:
     - name: Cleanup workspace
       if: always()
       run: |
-        rm -rf data results
-        echo "Workspace cleaned"
+        # 清理所有生成的文件和目录
+        rm -rf data results downloads
+        # 清理Python缓存
+        find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+        find . -type f -name "*.pyc" -delete 2>/dev/null || true
+        # 显示清理后的目录结构
+        echo "=== 清理后的工作区 ==="
+        ls -la
+        echo "======================"
+        echo "Workspace fully cleaned"

@@ -52,7 +52,7 @@ class NewsPushPipeline:
     
     def fetch_news(self, hours: int = 1, use_keywords: bool = False):
         """
-        抓取新闻
+        抓取新闻（不保存到本地，仅返回内存中）
         use_keywords: 是否使用关键词过滤（False=抓取所有新闻）
         """
         print(f"[{datetime.now()}] 开始抓取新闻...")
@@ -68,8 +68,8 @@ class NewsPushPipeline:
             all_news.extend(news_items)
             print(f"  从 {url} 获取 {len(news_items)} 条新闻")
         
-        self.news_fetcher.save_to_database(all_news)
-        print(f"  保存 {len(all_news)} 条新闻到数据库")
+        # 不再保存原始新闻到本地，只在内存中处理
+        print(f"  共获取 {len(all_news)} 条新闻（不保存原始数据）")
         
         return all_news
     
@@ -206,7 +206,7 @@ class NewsPushPipeline:
                 print(f"    获取配图...")
                 news_dict = {
                     "title": item['news'].title,
-                    "url": getattr(item['news'], 'url', ''),
+                    "url": getattr(item['news'], 'link', ''),  # NewsItem 使用 link 而不是 url
                     "description": getattr(item['news'], 'description', '')
                 }
                 analysis_dict = analysis.to_dict() if hasattr(analysis, 'to_dict') else {}
@@ -455,13 +455,10 @@ def main():
         pipeline.fetch_news(use_keywords=False)
     
     elif args.deep_analyze:
-        recent_news = pipeline.news_fetcher.get_recent_news(hours=24)
-        analyzed = pipeline.deep_analyze_news(recent_news, max_analyze=args.analyze)
-        
-        for item in analyzed:
-            result_file = pipeline.results_dir / f"analysis_{int(time.time())}.json"
-            with open(result_file, 'w', encoding='utf-8') as f:
-                json.dump(item["deep_analysis"].to_dict(), f, ensure_ascii=False, indent=2)
+        # 从内存中重新抓取新闻进行分析（不读取本地存储）
+        print("[注意] 重新抓取新闻进行分析...")
+        news_items = pipeline.fetch_news(use_keywords=False)
+        analyzed = pipeline.deep_analyze_news(news_items, max_analyze=args.analyze)
         
         print(f"\n完成深度分析 {len(analyzed)} 条新闻")
     
