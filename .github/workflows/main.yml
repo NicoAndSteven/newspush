@@ -2,8 +2,8 @@ name: NewsPush Daily
 
 on:
   schedule:
-    - cron: '0 0 * * *'      # 北京时间每天早上 8:00
-    - cron: '0 6 * * *'      # 北京时间每天下午 14:00
+    - cron: '0 0 * * *'    # 北京时间每天 8:00
+    - cron: '0 6 * * *'    # 北京时间每天 14:00
   workflow_dispatch:
     inputs:
       max_analyze:
@@ -11,11 +11,6 @@ on:
         required: false
         default: '5'
         type: string
-      no_cleanup:
-        description: '不清理存储（保留临时文件）'
-        required: false
-        default: false
-        type: boolean
 
 jobs:
   newspush:
@@ -36,10 +31,19 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Create necessary directories
+      - name: Debug Environment Variables
+        run: |
+          echo "=== Secrets Debug ==="
+          echo "DASHSCOPE_API_KEY set: ${{ secrets.DASHSCOPE_API_KEY != '' }}"
+          echo "SMTP_SERVER set: ${{ secrets.SMTP_SERVER != '' }}"
+          echo "SMTP_PORT set: ${{ secrets.SMTP_PORT != '' }}"
+          echo "SMTP_USER set: ${{ secrets.SMTP_USER != '' }}"
+          echo "EMAIL_TO set: ${{ secrets.EMAIL_TO != '' }}"
+          echo "====================="
+
+      - name: Create directories
         run: mkdir -p data results downloads
 
-      # ←←← 重点在这里：把 env 放到这个 step 里
       - name: Run NewsPush
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
@@ -48,21 +52,10 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: |
-          python main.py \
-            --once \
-            --analyze ${{ inputs.max_analyze || '5' }}
+          echo "Inside Run step - SMTP_PORT = $SMTP_PORT"
+          python main.py --once --analyze ${{ inputs.max_analyze || '5' }}
 
-      - name: Cleanup workspace
+      - name: Cleanup
         if: always()
-        run: |
-          echo "=== 开始清理工作区 ==="
-          rm -rf data results downloads
-          find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          find . -type f -name "*.pyc" -delete 2>/dev/null || true
-          echo "=== 清理后的目录结构 ==="
-          ls -la
-          echo "======================"
-          echo "Workspace cleaned up."
+        run: rm -rf data results downloads
