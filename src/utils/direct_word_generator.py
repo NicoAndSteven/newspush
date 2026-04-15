@@ -4,7 +4,7 @@
 """
 import requests
 import io
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, TYPE_CHECKING
 from pathlib import Path
 
 try:
@@ -17,6 +17,11 @@ try:
     DOCX_AVAILABLE = True
 except ImportError:
     DOCX_AVAILABLE = False
+    # 定义一个占位符类型以避免类型注解错误
+    if TYPE_CHECKING:
+        from docx import Document
+    else:
+        Document = object
 
 
 class DirectWordGenerator:
