@@ -100,6 +100,11 @@ class DeepNewsAnalyzer:
             enable_fact_check: 是否启用事实核查（已弃用，保留参数用于兼容）
         """
         
+        # 检查客户端是否初始化成功
+        if not self.client:
+            print(f"  [错误] AI 客户端未初始化，请检查 API Key 配置")
+            return self._create_fallback_result(title, content)
+        
         current_time = datetime.now().strftime("%Y年%m月%d日")
         
         depth_prompt = {
@@ -348,6 +353,11 @@ class CommentaryGenerator:
     
     def generate_commentary(self, analysis: DeepAnalysisResult, style: str = "balanced") -> str:
         """生成新闻点评"""
+        
+        # 检查分析器是否可用
+        if not self.analyzer or not self.analyzer.client:
+            print(f"  [错误] AI 客户端未初始化，无法生成点评")
+            return ""
         
         style_prompt = {
             "balanced": "客观平衡，多角度分析",

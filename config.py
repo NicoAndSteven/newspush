@@ -12,7 +12,7 @@ class Config:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     
-    DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
+    DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY") or ""
     
     RSS_SOURCES = [
         # 图片抓取效果好的新闻源（基于测试结果）
