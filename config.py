@@ -25,11 +25,22 @@ class Config:
     MAX_NEWS_PER_SOURCE = int(os.getenv("MAX_NEWS_PER_SOURCE", "5"))
     MAX_NEWS_TO_ANALYZE = int(os.getenv("MAX_NEWS_TO_ANALYZE", "10"))
     
-    SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-    SMTP_USER = os.getenv("SMTP_USER", "")
-    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-    EMAIL_TO = os.getenv("EMAIL_TO", "")
+    # === SMTP 配置（支持 GitHub Actions Secrets）===
+    SMTP_SERVER = os.getenv("SMTP_SERVER") or "smtp.gmail.com"
+    
+    # 安全处理 SMTP_PORT（防止空字符串导致崩溃）
+    smtp_port_str = os.getenv("SMTP_PORT", "587").strip()
+    SMTP_PORT = int(smtp_port_str) if smtp_port_str else 587
+    
+    SMTP_USER = os.getenv("SMTP_USER") or ""
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") or ""
+    EMAIL_TO = os.getenv("EMAIL_TO") or ""
+    
+    # 可选：打印调试信息（测试完后可以删掉）
+    print(f"[DEBUG] SMTP_SERVER: {SMTP_SERVER}")
+    print(f"[DEBUG] SMTP_PORT: {SMTP_PORT}")
+    print(f"[DEBUG] SMTP_USER: {'***' if SMTP_USER else 'EMPTY'}")
+    print(f"[DEBUG] EMAIL_TO: {EMAIL_TO}")
     
     CLEANUP_AFTER_SEND = os.getenv("CLEANUP_AFTER_SEND", "true").lower() == "true"
 
