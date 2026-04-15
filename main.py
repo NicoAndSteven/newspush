@@ -8,25 +8,61 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 
+print("[LOG] ========== NewsPush 启动 ==========")
+print(f"[LOG] 当前时间: {datetime.now()}")
+print(f"[LOG] Python 版本: {sys.version}")
+print(f"[LOG] 工作目录: {os.getcwd()}")
+
+print("[LOG] 步骤1: 加载环境变量...")
 load_dotenv()
+print("[LOG] 步骤1: 完成")
 
+print("[LOG] 步骤2: 下载 nltk 数据（newspaper3k 需要）...")
+import nltk
+try:
+    nltk.download('punkt', quiet=True)
+    nltk.download('punkt_tab', quiet=True)
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+    print("[LOG] 步骤2: nltk 数据下载完成")
+except Exception as e:
+    print(f"[LOG] 步骤2: nltk 下载警告: {e}")
+
+print("[LOG] 步骤3: 设置 Python 路径...")
 sys.path.insert(0, str(Path(__file__).parent / "src"))
+print("[LOG] 步骤3: 完成")
 
+print("[LOG] 步骤4: 导入模块...")
+print("[LOG]   - 导入 config...")
 from config import config
+print("[LOG]   - 导入 rss_fetcher...")
 from news_capture.rss_fetcher import RSSNewsFetcher
+print("[LOG]   - 导入 deep_analyzer...")
 from ai_processor.deep_analyzer import DeepNewsAnalyzer, CommentaryGenerator, AnalysisDepth
+print("[LOG]   - 导入 two_stage_analyzer...")
 from ai_processor.two_stage_analyzer import TwoStageAnalyzer
+print("[LOG]   - 导入 sensitivity_checker...")
 from utils.sensitivity_checker import check_news_sensitivity, SensitivityChecker, SensitivityLevel
+print("[LOG]   - 导入 output_formatter...")
 from utils.output_formatter import generate_both_versions
+print("[LOG]   - 导入 direct_word_generator...")
 from utils.direct_word_generator import generate_word_directly, DOCX_AVAILABLE
+print("[LOG]   - 导入 translator...")
 from utils.translator import translate_if_needed
+print("[LOG]   - 导入 email_sender...")
 from utils.email_sender import send_results_via_email
+print("[LOG]   - 导入 cleanup...")
 from utils.cleanup import cleanup_all_results
+print("[LOG] 步骤4: 所有模块导入完成")
 
 class NewsPushPipeline:
     def __init__(self):
+        print("[LOG] 步骤5: 初始化 NewsPushPipeline...")
+        
+        print("[LOG]   - 初始化存储...")
         from storage.json_storage import JSONStorage
         self.storage = JSONStorage()
+        
+        print("[LOG]   - 初始化 RSS 抓取器...")
         self.news_fetcher = RSSNewsFetcher(self.storage)
         
         # 深度分析器（使用阿里云百炼 Qwen 大模型）
@@ -35,26 +71,30 @@ class NewsPushPipeline:
         
         # 调试：直接检查环境变量
         dashscope_key = os.getenv("DASHSCOPE_API_KEY", "")
-        print(f"  [DEBUG] 环境变量 DASHSCOPE_API_KEY: {'已设置' if dashscope_key else '未设置'}")
-        print(f"  [DEBUG] config.DASHSCOPE_API_KEY: {'已设置' if config.DASHSCOPE_API_KEY else '未设置'}")
+        print(f"[LOG]   - 检查 API Key: 环境变量={'已设置' if dashscope_key else '未设置'}, config={'已设置' if config.DASHSCOPE_API_KEY else '未设置'}")
         
         if config.DASHSCOPE_API_KEY:
-            print("  [AI] 使用阿里云百炼 Qwen 大模型")
+            print("[LOG]   - 初始化阿里云百炼 Qwen 大模型...")
             self.deep_analyzer = DeepNewsAnalyzer("dashscope", config.DASHSCOPE_API_KEY, enable_search)
+            print("[LOG]   - AI 初始化完成")
         else:
-            print("  [警告] 未配置阿里云 API Key")
+            print("[LOG]   - [警告] 未配置阿里云 API Key")
         
+        print("[LOG]   - 初始化点评生成器...")
         self.commentary_generator = CommentaryGenerator(self.deep_analyzer) if self.deep_analyzer else None
         
-        # 两阶段分析器
+        print("[LOG]   - 初始化两阶段分析器...")
         self.two_stage_analyzer = TwoStageAnalyzer(self.deep_analyzer) if self.deep_analyzer else None
         
-        # 图片获取器（分层配图策略）
+        print("[LOG]   - 初始化图片获取器...")
         from utils.image_fetcher import ImageFetcherSync
         self.image_fetcher = ImageFetcherSync()
         
+        print("[LOG]   - 创建结果目录...")
         self.results_dir = Path("./results")
         self.results_dir.mkdir(exist_ok=True)
+        
+        print("[LOG] 步骤5: NewsPushPipeline 初始化完成")
     
     def fetch_news(self, hours: int = 1, use_keywords: bool = False):
         """
@@ -459,23 +499,32 @@ def main():
     
     args = parser.parse_args()
     
+    print("[LOG] ==========================================")
+    print("[LOG] 步骤6: 开始执行主流程")
+    print(f"[LOG] 参数: once={args.once}, analyze={args.analyze}, no_email={args.no_email}")
+    print("[LOG] ==========================================")
+    
+    print("[LOG] 创建 NewsPushPipeline 实例...")
     pipeline = NewsPushPipeline()
+    print("[LOG] NewsPushPipeline 实例创建完成")
     
     if args.fetch_only:
+        print("[LOG] 模式: 仅抓取新闻")
         pipeline.fetch_news(use_keywords=False)
     
     elif args.deep_analyze:
-        # 从内存中重新抓取新闻进行分析（不读取本地存储）
-        print("[注意] 重新抓取新闻进行分析...")
+        print("[LOG] 模式: 深度分析")
+        print("[LOG] 重新抓取新闻进行分析...")
         news_items = pipeline.fetch_news(use_keywords=False)
         analyzed = pipeline.deep_analyze_news(news_items, max_analyze=args.analyze)
-        
-        print(f"\n完成深度分析 {len(analyzed)} 条新闻")
+        print(f"\n[LOG] 完成深度分析 {len(analyzed)} 条新闻")
     
     elif args.send_email:
+        print("[LOG] 模式: 仅发送邮件")
         send_results_via_email(results_dir=str(pipeline.results_dir))
     
     elif args.cleanup:
+        print("[LOG] 模式: 仅清理存储")
         cleanup_all_results(
             results_dir=str(pipeline.results_dir),
             data_dir="./data",
@@ -484,6 +533,7 @@ def main():
         )
     
     elif args.once:
+        print("[LOG] 模式: 执行完整流程")
         pipeline.run_full_pipeline(
             max_fetch=args.fetch,
             max_analyze=args.analyze,
@@ -493,10 +543,15 @@ def main():
         )
     
     elif args.schedule:
+        print(f"[LOG] 模式: 定时执行，间隔 {args.schedule} 小时")
         pipeline.run_scheduled(args.schedule)
     
     else:
         parser.print_help()
+    
+    print("[LOG] ==========================================")
+    print("[LOG] 流程执行完毕")
+    print("[LOG] ==========================================")
 
 if __name__ == "__main__":
     main()
