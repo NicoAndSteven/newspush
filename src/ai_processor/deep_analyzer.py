@@ -4,6 +4,8 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
 from datetime import datetime
+import time
+import httpx
 
 class AnalysisDepth(Enum):
     LIGHT = "light"           # 简要分析
@@ -95,9 +97,14 @@ class DeepNewsAnalyzer:
             # 阿里云百炼 API
             try:
                 from openai import OpenAI
+                # 设置超时：连接10秒，读取120秒（AI生成需要较长时间）
+                http_client = httpx.Client(
+                    timeout=httpx.Timeout(120.0, connect=10.0)
+                )
                 self.client = OpenAI(
                     api_key=self.api_key,
-                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    http_client=http_client
                 )
                 print("  [DEBUG] 阿里云百炼客户端初始化成功")
             except ImportError as e:
@@ -205,34 +212,51 @@ class DeepNewsAnalyzer:
 """
         
         try:
-            if self.provider == "openai":
-                response = self.client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.8
-                )
-                result_text = response.choices[0].message.content
-            elif self.provider == "anthropic":
-                response = self.client.messages.create(
-                    model="claude-3-opus-20240229",
-                    max_tokens=4000,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                result_text = response.content[0].text
-            elif self.provider == "dashscope":
-                # 阿里云百炼 Qwen 模型
-                # 开启联网搜索功能（如果配置允许）
-                extra_body = {}
-                if self.enable_search:
-                    extra_body["enable_search"] = True
-                
-                response = self.client.chat.completions.create(
-                    model="qwen3.6-plus",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.8,
-                    extra_body=extra_body
-                )
-                result_text = response.choices[0].message.content
+            max_retries = 3
+            retry_delay = 5
+            
+            for attempt in range(max_retries):
+                try:
+                    if self.provider == "openai":
+                        response = self.client.chat.completions.create(
+                            model="gpt-4",
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.8
+                        )
+                        result_text = response.choices[0].message.content
+                    elif self.provider == "anthropic":
+                        response = self.client.messages.create(
+                            model="claude-3-opus-20240229",
+                            max_tokens=4000,
+                            messages=[{"role": "user", "content": prompt}]
+                        )
+                        result_text = response.content[0].text
+                    elif self.provider == "dashscope":
+                        # 阿里云百炼 Qwen 模型
+                        # 开启联网搜索功能（如果配置允许）
+                        extra_body = {}
+                        if self.enable_search:
+                            extra_body["enable_search"] = True
+                        
+                        print(f"    [API] 正在调用阿里云百炼 API（尝试 {attempt + 1}/{max_retries}）...")
+                        response = self.client.chat.completions.create(
+                            model="qwen-plus",
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.8,
+                            extra_body=extra_body
+                        )
+                        result_text = response.choices[0].message.content
+                        print(f"    [API] API 调用成功")
+                    
+                    break  # 成功则跳出重试循环
+                    
+                except Exception as api_error:
+                    if attempt < max_retries - 1:
+                        print(f"    [警告] API 调用失败: {api_error}，{retry_delay}秒后重试...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # 指数退避
+                    else:
+                        raise api_error
             
             # 提取 JSON
             json_str = self._extract_json(result_text)
@@ -411,35 +435,51 @@ class CommentaryGenerator:
 现在请开始写，直接输出文章正文，不要有任何前言或解释："""
         
         try:
-            if self.analyzer.provider == "openai":
-                response = self.analyzer.client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.8
-                )
-                return response.choices[0].message.content
-            elif self.analyzer.provider == "anthropic":
-                response = self.analyzer.client.messages.create(
-                    model="claude-3-opus-20240229",
-                    max_tokens=2500,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                return response.content[0].text
-            elif self.analyzer.provider == "dashscope":
-                # 阿里云百炼 Qwen 模型
-                extra_body = {}
-                if self.analyzer.enable_search:
-                    extra_body["enable_search"] = True
-                
-                response = self.analyzer.client.chat.completions.create(
-                    model="qwen3.6-plus",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.8,
-                    extra_body=extra_body
-                )
-                return response.choices[0].message.content
-            else:
-                return ""
+            max_retries = 3
+            retry_delay = 5
+            
+            for attempt in range(max_retries):
+                try:
+                    if self.analyzer.provider == "openai":
+                        response = self.analyzer.client.chat.completions.create(
+                            model="gpt-4",
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.8
+                        )
+                        return response.choices[0].message.content
+                    elif self.analyzer.provider == "anthropic":
+                        response = self.analyzer.client.messages.create(
+                            model="claude-3-opus-20240229",
+                            max_tokens=2500,
+                            messages=[{"role": "user", "content": prompt}]
+                        )
+                        return response.content[0].text
+                    elif self.analyzer.provider == "dashscope":
+                        # 阿里云百炼 Qwen 模型
+                        extra_body = {}
+                        if self.analyzer.enable_search:
+                            extra_body["enable_search"] = True
+                        
+                        print(f"    [API] 正在生成点评（尝试 {attempt + 1}/{max_retries}）...")
+                        response = self.analyzer.client.chat.completions.create(
+                            model="qwen-plus",
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.8,
+                            extra_body=extra_body
+                        )
+                        print(f"    [API] 点评生成成功")
+                        return response.choices[0].message.content
+                    else:
+                        return ""
+                        
+                except Exception as api_error:
+                    if attempt < max_retries - 1:
+                        print(f"    [警告] 点评生成失败: {api_error}，{retry_delay}秒后重试...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        raise api_error
+                        
         except Exception as e:
             print(f"Commentary generation error: {e}")
             return ""
