@@ -67,18 +67,30 @@ class DeepNewsAnalyzer:
         self.init_client()
     
     def init_client(self):
+        print(f"  [DEBUG] 初始化 AI 客户端: provider={self.provider}, api_key={'已设置' if self.api_key else '未设置'}")
+        
+        if not self.api_key:
+            print("  [错误] API Key 为空，无法初始化客户端")
+            return
+        
         if self.provider == "openai":
             try:
                 from openai import OpenAI
                 self.client = OpenAI(api_key=self.api_key)
-            except ImportError:
-                print("OpenAI package not installed")
+                print("  [DEBUG] OpenAI 客户端初始化成功")
+            except ImportError as e:
+                print(f"  [错误] OpenAI package 未安装: {e}")
+            except Exception as e:
+                print(f"  [错误] OpenAI 客户端初始化失败: {e}")
         elif self.provider == "anthropic":
             try:
                 import anthropic
                 self.client = anthropic.Anthropic(api_key=self.api_key)
-            except ImportError:
-                print("Anthropic package not installed")
+                print("  [DEBUG] Anthropic 客户端初始化成功")
+            except ImportError as e:
+                print(f"  [错误] Anthropic package 未安装: {e}")
+            except Exception as e:
+                print(f"  [错误] Anthropic 客户端初始化失败: {e}")
         elif self.provider == "dashscope":
             # 阿里云百炼 API
             try:
@@ -87,8 +99,11 @@ class DeepNewsAnalyzer:
                     api_key=self.api_key,
                     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
                 )
-            except ImportError:
-                print("OpenAI package not installed")
+                print("  [DEBUG] 阿里云百炼客户端初始化成功")
+            except ImportError as e:
+                print(f"  [错误] OpenAI package 未安装: {e}")
+            except Exception as e:
+                print(f"  [错误] 阿里云百炼客户端初始化失败: {e}")
     
     def analyze_news_deep(self, title: str, content: str, depth: AnalysisDepth = AnalysisDepth.DEEP, enable_fact_check: bool = True) -> DeepAnalysisResult:
         """深度分析新闻，不限题材

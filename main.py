@@ -32,6 +32,12 @@ class NewsPushPipeline:
         # 深度分析器（使用阿里云百炼 Qwen 大模型）
         enable_search = os.getenv("ENABLE_SEARCH", "true").lower() == "true"
         self.deep_analyzer = None
+        
+        # 调试：直接检查环境变量
+        dashscope_key = os.getenv("DASHSCOPE_API_KEY", "")
+        print(f"  [DEBUG] 环境变量 DASHSCOPE_API_KEY: {'已设置' if dashscope_key else '未设置'}")
+        print(f"  [DEBUG] config.DASHSCOPE_API_KEY: {'已设置' if config.DASHSCOPE_API_KEY else '未设置'}")
+        
         if config.DASHSCOPE_API_KEY:
             print("  [AI] 使用阿里云百炼 Qwen 大模型")
             self.deep_analyzer = DeepNewsAnalyzer("dashscope", config.DASHSCOPE_API_KEY, enable_search)

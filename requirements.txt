@@ -10,6 +10,7 @@ lxml
 lxml_html_clean
 newspaper3k
 nltk
+openai
 pillow
 python-docx
 python-dotenv
