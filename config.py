@@ -15,9 +15,11 @@ class Config:
     DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
     
     RSS_SOURCES = [
-        "https://news.google.com/rss",
-        "https://www.reuters.com/rssFeed/worldNews",
-        "https://feeds.bbci.co.uk/news/world/rss.xml",
+        # 图片抓取效果好的新闻源（基于测试结果）
+        "https://feeds.bbci.co.uk/news/world/rss.xml",      # BBC - 图片抓取效果好
+        "https://www.theguardian.com/world/rss",             # The Guardian - 图片抓取效果好
+        "https://www.aljazeera.com/xml/rss/all.xml",         # Al Jazeera - 图片抓取效果好
+        "https://www.ft.com/?format=rss",                    # Financial Times - 图片抓取效果好
     ]
     
     MAX_NEWS_PER_SOURCE = int(os.getenv("MAX_NEWS_PER_SOURCE", "5"))

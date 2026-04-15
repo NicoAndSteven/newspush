@@ -376,12 +376,16 @@ class NewsPushPipeline:
         
         if cleanup and config.CLEANUP_AFTER_SEND:
             print("\n🧹 清理存储...")
+            # 清理结果目录（保留0个文件，即全部删除）
             cleanup_all_results(
                 results_dir=str(self.results_dir),
                 data_dir="./data",
-                max_age_hours=1,
+                max_age_hours=0,  # 0表示删除所有文件，不管新旧
                 keep_latest=0
             )
+            # 额外清理data目录中的所有文件
+            from utils.cleanup import clear_directory
+            clear_directory("./data")
     
     def run_scheduled(self, interval_hours: int = 1):
         """定时运行"""

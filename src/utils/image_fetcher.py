@@ -34,6 +34,8 @@ class ImageFetcher:
         3. Wikipedia 图片（人物/地点）
         4. Pexels 关键词搜索（兜底）
         
+        回退逻辑：如果newspaper3k失败或图片不足，自动尝试其他来源
+        
         Returns:
             List[str]: 图片URL列表（最多5张）
         """
@@ -41,36 +43,48 @@ class ImageFetcher:
         url = news_item.get("url", "")
         
         # 第一优先级：newspaper3k 抓取所有图片
+        np_success = False
         if url and NEWSPAPER_AVAILABLE:
             np_images = await self.extract_newspaper_images(url)
             if np_images:
                 images.extend(np_images)
+                np_success = True
                 print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片")
         
-        # 第二优先级：从原文抓 OG 图（如果newspaper3k没找到）
-        if len(images) < 2 and url:
+        # 第二优先级：从原文抓 OG 图
+        # 如果newspaper3k失败或图片不足(少于2张)，尝试OG图
+        if url and (not np_success or len(images) < 2):
             og_image = await self.extract_og_image(url)
             if og_image and og_image not in images:
                 images.append(og_image)
                 print(f"    [图片] 找到 OG 图")
         
         # 第三优先级：Wikipedia 人物/地点图
+        # 如果图片不足，尝试Wikipedia
         if analysis and len(images) < 3:
             entities = self._extract_entities(analysis)
             for entity in entities[:2]:
+                if len(images) >= 3:
+                    break
                 wiki_img = await self.get_wikipedia_image(entity)
                 if wiki_img and wiki_img not in images:
                     images.append(wiki_img)
                     print(f"    [图片] 找到 Wikipedia 图: {entity}")
         
         # 兜底：Pexels 关键词搜索
+        # 如果图片不足2张，使用Pexels兜底
         if len(images) < 2:
             tags = analysis.get("tags", []) if analysis else []
+            if not tags and news_item.get("title"):
+                # 如果没有tags，从标题提取关键词
+                tags = news_item["title"].split()[:3]
             if tags:
                 pexels_imgs = await self.search_pexels(tags[:3])
                 for img in pexels_imgs:
                     if img not in images:
                         images.append(img)
+                        if len(images) >= 2:
+                            break
                 if pexels_imgs:
                     print(f"    [图片] 找到 Pexels 图")
         
@@ -301,39 +315,59 @@ class ImageFetcherSync:
         self.pixabay_api_key = os.getenv("PIXABAY_API_KEY", "")
     
     def get_article_images(self, news_item: dict, analysis: dict = None) -> List[str]:
-        """获取文章配图（同步版本）"""
+        """
+        获取文章配图（同步版本）
+        
+        回退逻辑：如果newspaper3k失败或图片不足，自动尝试其他来源
+        """
         images = []
         url = news_item.get("url", "")
         
         # 第一优先级：newspaper3k 抓取所有图片
+        np_success = False
         if url and NEWSPAPER_AVAILABLE:
             np_images = self.extract_newspaper_images(url)
             if np_images:
                 images.extend(np_images)
+                np_success = True
                 print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片")
         
         # 第二优先级：OG 图
-        if len(images) < 2 and url:
+        # 如果newspaper3k失败或图片不足(少于2张)，尝试OG图
+        if url and (not np_success or len(images) < 2):
             og_image = self.extract_og_image(url)
             if og_image and og_image not in images:
                 images.append(og_image)
+                print(f"    [图片] 找到 OG 图")
         
         # 第三优先级：Wikipedia
+        # 如果图片不足，尝试Wikipedia
         if analysis and len(images) < 3:
             entities = self._extract_entities(analysis)
             for entity in entities[:2]:
+                if len(images) >= 3:
+                    break
                 wiki_img = self.get_wikipedia_image(entity)
                 if wiki_img and wiki_img not in images:
                     images.append(wiki_img)
+                    print(f"    [图片] 找到 Wikipedia 图: {entity}")
         
         # 兜底：Pexels
+        # 如果图片不足2张，使用Pexels兜底
         if len(images) < 2:
             tags = analysis.get("tags", []) if analysis else []
+            if not tags and news_item.get("title"):
+                # 如果没有tags，从标题提取关键词
+                tags = news_item["title"].split()[:3]
             if tags:
                 pexels_imgs = self.search_pexels(tags[:3])
                 for img in pexels_imgs:
                     if img not in images:
                         images.append(img)
+                        if len(images) >= 2:
+                            break
+                if pexels_imgs:
+                    print(f"    [图片] 找到 Pexels 图")
         
         return images[:5]
     
