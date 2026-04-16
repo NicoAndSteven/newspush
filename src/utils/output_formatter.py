@@ -130,11 +130,11 @@ class OutputFormatter:
 
 ## 元数据
 
-- **内容类型**: {stage2_analysis.get('content_type', '')}
-- **情感倾向**: {stage2_analysis.get('sentiment', '')}
-- **紧急程度**: {stage2_analysis.get('urgency_level', 5)}/10
-- **标签**: {', '.join(stage2_analysis.get('tags', []))}
-- **可信度**: {stage2_analysis.get('credibility', {}).get('level', 'unknown')}
+- **内容类型**: {stage2_analysis.get('content_type', '') or ''}
+- **情感倾向**: {stage2_analysis.get('sentiment', '') or ''}
+- **紧急程度**: {stage2_analysis.get('urgency_level', 5) or 5}/10
+- **标签**: {', '.join(stage2_analysis.get('tags', []) or [])}
+- **可信度**: {(stage2_analysis.get('credibility') or {}).get('level', 'unknown')}
 
 ---
 
