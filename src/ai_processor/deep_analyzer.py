@@ -61,15 +61,16 @@ class DeepAnalysisResult:
         return asdict(self)
 
 class DeepNewsAnalyzer:
-    def __init__(self, provider: str = "openai", api_key: str = None, enable_search: bool = True):
+    def __init__(self, provider: str = "openai", api_key: str = None, enable_search: bool = True, model: str = None):
         self.provider = provider
         self.api_key = api_key
         self.enable_search = enable_search
+        self.model = model
         self.client = None
         self.init_client()
     
     def init_client(self):
-        print(f"  [DEBUG] 初始化 AI 客户端: provider={self.provider}, api_key={'已设置' if self.api_key else '未设置'}")
+        print(f"  [DEBUG] 初始化 AI 客户端: provider={self.provider}, api_key={'已设置' if self.api_key else '未设置'}, model={self.model}")
         
         if not self.api_key:
             print("  [错误] API Key 为空，无法初始化客户端")
@@ -79,16 +80,32 @@ class DeepNewsAnalyzer:
             try:
                 from openai import OpenAI
                 self.client = OpenAI(api_key=self.api_key)
-                print("  [DEBUG] OpenAI 客户端初始化成功")
+                self.model = self.model or "gpt-4o-mini"
+                print(f"  [DEBUG] OpenAI 客户端初始化成功，模型: {self.model}")
             except ImportError as e:
                 print(f"  [错误] OpenAI package 未安装: {e}")
             except Exception as e:
                 print(f"  [错误] OpenAI 客户端初始化失败: {e}")
+        elif self.provider == "openrouter":
+            # OpenRouter API（兼容 OpenAI 格式）
+            try:
+                from openai import OpenAI
+                self.client = OpenAI(
+                    api_key=self.api_key,
+                    base_url="https://openrouter.ai/api/v1"
+                )
+                self.model = self.model or "openai/gpt-4o-mini"
+                print(f"  [DEBUG] OpenRouter 客户端初始化成功，模型: {self.model}")
+            except ImportError as e:
+                print(f"  [错误] OpenAI package 未安装: {e}")
+            except Exception as e:
+                print(f"  [错误] OpenRouter 客户端初始化失败: {e}")
         elif self.provider == "anthropic":
             try:
                 import anthropic
                 self.client = anthropic.Anthropic(api_key=self.api_key)
-                print("  [DEBUG] Anthropic 客户端初始化成功")
+                self.model = self.model or "claude-3-opus-20240229"
+                print(f"  [DEBUG] Anthropic 客户端初始化成功，模型: {self.model}")
             except ImportError as e:
                 print(f"  [错误] Anthropic package 未安装: {e}")
             except Exception as e:
@@ -106,7 +123,8 @@ class DeepNewsAnalyzer:
                     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
                     http_client=http_client
                 )
-                print("  [DEBUG] 阿里云百炼客户端初始化成功")
+                self.model = self.model or "qwen3.6-plus"
+                print(f"  [DEBUG] 阿里云百炼客户端初始化成功，模型: {self.model}")
             except ImportError as e:
                 print(f"  [错误] OpenAI package 未安装: {e}")
             except Exception as e:
@@ -217,37 +235,38 @@ class DeepNewsAnalyzer:
             
             for attempt in range(max_retries):
                 try:
-                    if self.provider == "openai":
+                    print(f"    [API] 正在调用 {self.provider} API（尝试 {attempt + 1}/{max_retries}），模型: {self.model}...")
+                    
+                    if self.provider in ["openai", "openrouter"]:
+                        # OpenAI 和 OpenRouter 使用相同的 API 格式
                         response = self.client.chat.completions.create(
-                            model="gpt-4",
+                            model=self.model,
                             messages=[{"role": "user", "content": prompt}],
                             temperature=0.8
                         )
                         result_text = response.choices[0].message.content
                     elif self.provider == "anthropic":
                         response = self.client.messages.create(
-                            model="claude-3-opus-20240229",
+                            model=self.model,
                             max_tokens=4000,
                             messages=[{"role": "user", "content": prompt}]
                         )
                         result_text = response.content[0].text
                     elif self.provider == "dashscope":
                         # 阿里云百炼 Qwen 模型
-                        # 开启联网搜索功能（如果配置允许）
                         extra_body = {}
                         if self.enable_search:
                             extra_body["enable_search"] = True
                         
-                        print(f"    [API] 正在调用阿里云百炼 API（尝试 {attempt + 1}/{max_retries}）...")
                         response = self.client.chat.completions.create(
-                            model="qwen3.6-plus",
+                            model=self.model,
                             messages=[{"role": "user", "content": prompt}],
                             temperature=0.8,
                             extra_body=extra_body
                         )
                         result_text = response.choices[0].message.content
-                        print(f"    [API] API 调用成功")
                     
+                    print(f"    [API] API 调用成功")
                     break  # 成功则跳出重试循环
                     
                 except Exception as api_error:
@@ -440,29 +459,31 @@ class CommentaryGenerator:
             
             for attempt in range(max_retries):
                 try:
-                    if self.analyzer.provider == "openai":
+                    print(f"    [API] 正在生成点评（尝试 {attempt + 1}/{max_retries}），模型: {self.analyzer.model}...")
+                    
+                    if self.analyzer.provider in ["openai", "openrouter"]:
                         response = self.analyzer.client.chat.completions.create(
-                            model="gpt-4",
+                            model=self.analyzer.model,
                             messages=[{"role": "user", "content": prompt}],
                             temperature=0.8
                         )
+                        print(f"    [API] 点评生成成功")
                         return response.choices[0].message.content
                     elif self.analyzer.provider == "anthropic":
                         response = self.analyzer.client.messages.create(
-                            model="claude-3-opus-20240229",
+                            model=self.analyzer.model,
                             max_tokens=2500,
                             messages=[{"role": "user", "content": prompt}]
                         )
+                        print(f"    [API] 点评生成成功")
                         return response.content[0].text
                     elif self.analyzer.provider == "dashscope":
-                        # 阿里云百炼 Qwen 模型
                         extra_body = {}
                         if self.analyzer.enable_search:
                             extra_body["enable_search"] = True
                         
-                        print(f"    [API] 正在生成点评（尝试 {attempt + 1}/{max_retries}）...")
                         response = self.analyzer.client.chat.completions.create(
-                            model="qwen3.6-plus",
+                            model=self.analyzer.model,
                             messages=[{"role": "user", "content": prompt}],
                             temperature=0.8,
                             extra_body=extra_body

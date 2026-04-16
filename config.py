@@ -13,6 +13,8 @@ class Config:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     
     DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY") or ""
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or ""
+    OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL") or "openai/gpt-4o-mini"
     
     RSS_SOURCES = [
         # 图片抓取效果好的新闻源（基于测试结果）

@@ -34,6 +34,8 @@ jobs:
       - name: Debug Environment Variables
         run: |
           echo "=== Secrets Debug ==="
+          echo "OPENROUTER_API_KEY set: ${{ secrets.OPENROUTER_API_KEY != '' }}"
+          echo "OPENROUTER_MODEL set: ${{ secrets.OPENROUTER_MODEL != '' }}"
           echo "DASHSCOPE_API_KEY set: ${{ secrets.DASHSCOPE_API_KEY != '' }}"
           echo "SMTP_SERVER set: ${{ secrets.SMTP_SERVER != '' }}"
           echo "SMTP_PORT set: ${{ secrets.SMTP_PORT != '' }}"
@@ -46,6 +48,8 @@ jobs:
 
       - name: Run NewsPush
         env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

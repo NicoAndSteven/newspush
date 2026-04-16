@@ -65,20 +65,31 @@ class NewsPushPipeline:
         print("[LOG]   - 初始化 RSS 抓取器...")
         self.news_fetcher = RSSNewsFetcher(self.storage)
         
-        # 深度分析器（使用阿里云百炼 Qwen 大模型）
+        # 深度分析器（支持多种 AI 提供商）
         enable_search = os.getenv("ENABLE_SEARCH", "true").lower() == "true"
         self.deep_analyzer = None
         
-        # 调试：直接检查环境变量
+        # 优先级：OpenRouter > 阿里云百炼
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
         dashscope_key = os.getenv("DASHSCOPE_API_KEY", "")
-        print(f"[LOG]   - 检查 API Key: 环境变量={'已设置' if dashscope_key else '未设置'}, config={'已设置' if config.DASHSCOPE_API_KEY else '未设置'}")
         
-        if config.DASHSCOPE_API_KEY:
+        print(f"[LOG]   - 检查 API Key: OpenRouter={'已设置' if openrouter_key else '未设置'}, 阿里云={'已设置' if dashscope_key else '未设置'}")
+        
+        if config.OPENROUTER_API_KEY:
+            print(f"[LOG]   - 初始化 OpenRouter（模型: {config.OPENROUTER_MODEL}）...")
+            self.deep_analyzer = DeepNewsAnalyzer(
+                provider="openrouter",
+                api_key=config.OPENROUTER_API_KEY,
+                enable_search=enable_search,
+                model=config.OPENROUTER_MODEL
+            )
+            print("[LOG]   - AI 初始化完成")
+        elif config.DASHSCOPE_API_KEY:
             print("[LOG]   - 初始化阿里云百炼 Qwen 大模型...")
             self.deep_analyzer = DeepNewsAnalyzer("dashscope", config.DASHSCOPE_API_KEY, enable_search)
             print("[LOG]   - AI 初始化完成")
         else:
-            print("[LOG]   - [警告] 未配置阿里云 API Key")
+            print("[LOG]   - [警告] 未配置任何 AI API Key")
         
         print("[LOG]   - 初始化点评生成器...")
         self.commentary_generator = CommentaryGenerator(self.deep_analyzer) if self.deep_analyzer else None
