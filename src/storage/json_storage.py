@@ -178,6 +178,83 @@ class JSONStorage:
         """获取待处理任务"""
         data = self._load_json(self.tasks_file)
         return [t for t in data.get('tasks', []) if t.get('status') == 'pending']
+    
+    # ========== 已分析文章去重 ==========
+    
+    def is_news_analyzed(self, link: str) -> bool:
+        """检查新闻是否已分析过"""
+        data = self._load_json(self.news_file)
+        for item in data.get('news', []):
+            if item['link'] == link:
+                # 检查是否有分析标记
+                return item.get('analyzed', False)
+        return False
+    
+    def mark_news_as_analyzed(self, link: str, analysis_result: Dict = None):
+        """标记新闻为已分析"""
+        data = self._load_json(self.news_file)
+        for item in data.get('news', []):
+            if item['link'] == link:
+                item['analyzed'] = True
+                item['analyzed_at'] = datetime.now().isoformat()
+                if analysis_result:
+                    item['analysis_summary'] = analysis_result.get('summary', '')
+                    item['content_type'] = analysis_result.get('content_type', '')
+                break
+        self._save_json(self.news_file, data)
+    
+    def get_unanalyzed_news(self, hours: int = 24) -> List[Dict]:
+        """获取未分析的新闻"""
+        data = self._load_json(self.news_file)
+        all_news = data.get('news', [])
+        
+        if hours <= 0:
+            return [item for item in all_news if not item.get('analyzed', False)]
+        
+        # 过滤最近的新闻且未分析的
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+        unanalyzed_news = []
+        
+        for item in all_news:
+            # 已分析的跳过
+            if item.get('analyzed', False):
+                continue
+            
+            try:
+                item_time = datetime.fromisoformat(item.get('created_at', ''))
+                if item_time >= cutoff_time:
+                    unanalyzed_news.append(item)
+            except:
+                # 如果没有创建时间，也包含在内
+                unanalyzed_news.append(item)
+        
+        # 按创建时间倒序
+        unanalyzed_news.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        return unanalyzed_news
+    
+    def clear_old_analyzed_news(self, keep_days: int = 7):
+        """清理已分析的旧新闻（保留最近 N 天）"""
+        data = self._load_json(self.news_file)
+        cutoff_time = datetime.now() - timedelta(days=keep_days)
+        
+        filtered_news = []
+        for item in data.get('news', []):
+            # 保留未分析的
+            if not item.get('analyzed', False):
+                filtered_news.append(item)
+                continue
+            
+            # 已分析的，检查时间
+            try:
+                item_time = datetime.fromisoformat(item.get('analyzed_at', item.get('created_at', '')))
+                if item_time >= cutoff_time:
+                    filtered_news.append(item)
+            except:
+                filtered_news.append(item)
+        
+        data['news'] = filtered_news
+        self._save_json(self.news_file, data)
+        return len(filtered_news)
 
 
 # 全局实例

@@ -119,7 +119,7 @@ class NewsPushPipeline:
         return all_news
     
     def deep_analyze_news(self, news_items, depth: AnalysisDepth = AnalysisDepth.DEEP, max_analyze: int = None):
-        """深度分析新闻（集成敏感度检查 + 两阶段分析）"""
+        """深度分析新闻（集成敏感度检查 + 两阶段分析 + 去重）"""
         if not self.deep_analyzer or not self.two_stage_analyzer:
             print("未配置深度分析 AI API，跳过分析")
             return []
@@ -130,8 +130,26 @@ class NewsPushPipeline:
         if max_analyze is None:
             max_analyze = config.MAX_NEWS_TO_ANALYZE
         
-        news_to_analyze = news_items[:max_analyze]
-        print(f"  将分析 {len(news_to_analyze)} 条新闻（总共 {len(news_items)} 条）")
+        # 去重：过滤掉已分析的新闻
+        news_to_analyze = []
+        skipped_count = 0
+        for item in news_items:
+            if len(news_to_analyze) >= max_analyze:
+                break
+            
+            # 检查是否已分析过
+            if self.storage.is_news_analyzed(item.link):
+                print(f"  [跳过] 已分析过: {item.title[:50]}...")
+                skipped_count += 1
+                continue
+            
+            news_to_analyze.append(item)
+        
+        print(f"  将分析 {len(news_to_analyze)} 条新闻（总共 {len(news_items)} 条，跳过已分析 {skipped_count} 条）")
+        
+        if not news_to_analyze:
+            print("  没有需要分析的新新闻")
+            return []
         
         analyzed = []
         for item in news_to_analyze:
@@ -188,6 +206,12 @@ class NewsPushPipeline:
                 "use_two_stage": use_two_stage
             })
             
+            # 标记为已分析
+            self.storage.mark_news_as_analyzed(item.link, {
+                'summary': result.summary,
+                'content_type': result.content_type
+            })
+            
             # 显示分析结果摘要
             print(f"    [OK] 类型: {result.content_type}")
             print(f"    [OK] 紧急度: {result.urgency_level}/10")
@@ -195,6 +219,9 @@ class NewsPushPipeline:
             # 高敏感新闻提示人工复核
             if sensitivity_level == SensitivityLevel.HIGH:
                 print(f"    [⚠️ 注意] 高敏感新闻，建议人工复核")
+        
+        # 清理旧数据
+        self.storage.clear_old_analyzed_news(keep_days=7)
         
         return analyzed
     
