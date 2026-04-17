@@ -295,6 +295,9 @@ class RSSNewsFetcher:
     def fetch_rss_feed(self, url: str, category: str = "general", timeout: int = 10, max_items: int = 5) -> Tuple[List[NewsItem], str]:
         """
         抓取 RSS 订阅源
+        支持两种格式:
+        1. rss2json.com API 返回的 JSON 格式
+        2. 标准 RSS XML 格式
         
         Args:
             url: RSS 地址
@@ -324,29 +327,53 @@ class RSSNewsFetcher:
                 print(f"[RSS] Request error for {url}: {e}")
                 return [], f"request_error: {e}"
             
-            # 解析 RSS
-            feed = feedparser.parse(response.content)
-            
-            if feed.bozo and hasattr(feed, 'bozo_exception'):
-                print(f"[RSS] Parse warning for {url}: {feed.bozo_exception}")
-            
             news_items = []
             
-            # 限制抓取数量
-            for entry in feed.entries[:max_items]:
-                # 清理标题和描述中的 HTML
-                title = clean_html(entry.get('title', ''))
-                description = clean_html(entry.get('summary', entry.get('description', '')))
+            # 判断是 rss2json.com 的 JSON 格式还是标准 RSS XML
+            if 'rss2json.com' in url:
+                # 解析 JSON 格式
+                try:
+                    data = response.json()
+                    items = data.get('items', [])
+                    feed_title = data.get('feed', {}).get('title', url)
+                    
+                    for entry in items[:max_items]:
+                        title = clean_html(entry.get('title', ''))
+                        description = clean_html(entry.get('description', ''))
+                        
+                        news_item = NewsItem(
+                            title=title,
+                            link=entry.get('link', ''),
+                            description=description,
+                            published=entry.get('pubDate', datetime.now().isoformat()),
+                            source=feed_title,
+                            category=category
+                        )
+                        news_items.append(news_item)
+                        
+                except json.JSONDecodeError as e:
+                    print(f"[RSS] JSON parse error for {url}: {e}")
+                    return [], f"json_parse_error: {e}"
+            else:
+                # 解析标准 RSS XML 格式
+                feed = feedparser.parse(response.content)
                 
-                news_item = NewsItem(
-                    title=title,
-                    link=entry.get('link', ''),
-                    description=description,
-                    published=entry.get('published', datetime.now().isoformat()),
-                    source=feed.feed.get('title', url),
-                    category=category
-                )
-                news_items.append(news_item)
+                if feed.bozo and hasattr(feed, 'bozo_exception'):
+                    print(f"[RSS] Parse warning for {url}: {feed.bozo_exception}")
+                
+                for entry in feed.entries[:max_items]:
+                    title = clean_html(entry.get('title', ''))
+                    description = clean_html(entry.get('summary', entry.get('description', '')))
+                    
+                    news_item = NewsItem(
+                        title=title,
+                        link=entry.get('link', ''),
+                        description=description,
+                        published=entry.get('published', datetime.now().isoformat()),
+                        source=feed.feed.get('title', url),
+                        category=category
+                    )
+                    news_items.append(news_item)
             
             print(f"[RSS] Fetched {len(news_items)} items from {url}")
             return news_items, "success"

@@ -19,10 +19,10 @@ class Config:
         "https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/world/rss.xml",
         # BBC 首页
         "https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/rss.xml",
-        # CNN 世界新闻
-        "https://api.rss2json.com/v1/api.json?rss_url=https://edition.cnn.com/rss/edition_world.rss",
-        # 南华早报
-        "https://api.rss2json.com/v1/api.json?rss_url=https://www.scmp.com/rss/91/feed",
+        # The Guardian 世界新闻
+        "https://api.rss2json.com/v1/api.json?rss_url=https://www.theguardian.com/world/rss",
+        # Financial Times 世界新闻
+        "https://api.rss2json.com/v1/api.json?rss_url=https://www.ft.com/world?format=rss",
         # Al Jazeera
         "https://api.rss2json.com/v1/api.json?rss_url=https://www.aljazeera.com/xml/rss/all.xml",
     ]
