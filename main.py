@@ -48,8 +48,8 @@ print("[LOG]   - 导入 direct_word_generator...")
 from utils.direct_word_generator import generate_word_directly, DOCX_AVAILABLE
 print("[LOG]   - 导入 translator...")
 from utils.translator import translate_if_needed
-print("[LOG]   - 导入 email_sender...")
-from utils.email_sender import send_results_via_email
+print("[LOG]   - 导入 wechat_pusher...")
+from utils.wechat_pusher import push_article_to_wechat
 print("[LOG]   - 导入 cleanup...")
 from utils.cleanup import cleanup_all_results
 print("[LOG] 步骤4: 所有模块导入完成")
@@ -65,31 +65,19 @@ class NewsPushPipeline:
         print("[LOG]   - 初始化 RSS 抓取器...")
         self.news_fetcher = RSSNewsFetcher(self.storage)
         
-        # 深度分析器（支持多种 AI 提供商）
+        # 深度分析器（使用阿里云百炼 Qwen 大模型）
         enable_search = os.getenv("ENABLE_SEARCH", "true").lower() == "true"
         self.deep_analyzer = None
         
-        # 优先级：OpenRouter > 阿里云百炼
-        openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
         dashscope_key = os.getenv("DASHSCOPE_API_KEY", "")
+        print(f"[LOG]   - 检查 API Key: 阿里云百炼={'已设置' if dashscope_key else '未设置'}")
         
-        print(f"[LOG]   - 检查 API Key: OpenRouter={'已设置' if openrouter_key else '未设置'}, 阿里云={'已设置' if dashscope_key else '未设置'}")
-        
-        if config.OPENROUTER_API_KEY:
-            print(f"[LOG]   - 初始化 OpenRouter（模型: {config.OPENROUTER_MODEL}）...")
-            self.deep_analyzer = DeepNewsAnalyzer(
-                provider="openrouter",
-                api_key=config.OPENROUTER_API_KEY,
-                enable_search=enable_search,
-                model=config.OPENROUTER_MODEL
-            )
-            print("[LOG]   - AI 初始化完成")
-        elif config.DASHSCOPE_API_KEY:
+        if config.DASHSCOPE_API_KEY:
             print("[LOG]   - 初始化阿里云百炼 Qwen 大模型...")
             self.deep_analyzer = DeepNewsAnalyzer("dashscope", config.DASHSCOPE_API_KEY, enable_search)
             print("[LOG]   - AI 初始化完成")
         else:
-            print("[LOG]   - [警告] 未配置任何 AI API Key")
+            print("[LOG]   - [警告] 未配置阿里云百炼 API Key")
         
         print("[LOG]   - 初始化点评生成器...")
         self.commentary_generator = CommentaryGenerator(self.deep_analyzer) if self.deep_analyzer else None
@@ -421,26 +409,40 @@ class NewsPushPipeline:
         print("=" * 70)
         
         if send_email and commentaries:
-            print("\n📧 发送邮件...")
-            email_sent = send_results_via_email(
-                results_dir=str(self.results_dir),
-                to_email=config.EMAIL_TO
-            )
-            if email_sent:
-                print("  [OK] 邮件发送成功")
+            print("\n📱 推送到微信公众号草稿箱...")
+            pushed_count = 0
+            for item in commentaries:
+                news = item.get('news')
+                versions = item.get('versions', {})
+                
+                title = getattr(news, 'title', '未命名文章') if news else '未命名文章'
+                content = versions.get('public', '')
+                cover_image = None
+                
+                # 尝试获取封面图
+                images = getattr(news, 'images', []) if news else []
+                if images:
+                    cover_image = images[0]
+                
+                if push_article_to_wechat(title, content, cover_image):
+                    pushed_count += 1
+                    print(f"  [OK] 推送成功: {title[:30]}...")
+                else:
+                    print(f"  [跳过] 推送失败: {title[:30]}...")
+            
+            if pushed_count > 0:
+                print(f"  [完成] 成功推送 {pushed_count} 篇文章到草稿箱")
             else:
-                print("  [跳过] 邮件未发送（可能未配置）")
+                print("  [跳过] 未推送任何文章（可能未配置微信公众号）")
         
         if cleanup and config.CLEANUP_AFTER_SEND:
             print("\n🧹 清理存储...")
-            # 清理结果目录（保留0个文件，即全部删除）
             cleanup_all_results(
                 results_dir=str(self.results_dir),
                 data_dir="./data",
-                max_age_hours=0,  # 0表示删除所有文件，不管新旧
+                max_age_hours=0,
                 keep_latest=0
             )
-            # 额外清理data目录中的所有文件
             from utils.cleanup import clear_directory
             clear_directory("./data")
     
@@ -531,8 +533,17 @@ def main():
         print(f"\n[LOG] 完成深度分析 {len(analyzed)} 条新闻")
     
     elif args.send_email:
-        print("[LOG] 模式: 仅发送邮件")
-        send_results_via_email(results_dir=str(pipeline.results_dir))
+        print("[LOG] 模式: 仅推送到微信")
+        results_dir = Path("./results")
+        if results_dir.exists():
+            md_files = list(results_dir.glob("commentary_*_public.md"))
+            for md_file in md_files:
+                content = md_file.read_text(encoding='utf-8')
+                lines = content.split('\n')
+                title = lines[0].replace('# ', '') if lines else md_file.stem
+                push_article_to_wechat(title, content)
+        else:
+            print("[LOG] results 目录不存在")
     
     elif args.cleanup:
         print("[LOG] 模式: 仅清理存储")
