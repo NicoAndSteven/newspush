@@ -63,14 +63,19 @@ class WeChatDraftPusher:
             return None
         
         try:
+            print(f"    [下载图片] {image_url[:60]}...")
             response = requests.get(image_url, timeout=15, stream=True)
             
             if response.status_code != 200:
+                print(f"    [下载失败] HTTP {response.status_code}")
                 return None
             
             content_type = response.headers.get('content-type', '')
+            print(f"    [下载成功] Content-Type: {content_type}, 大小: {len(response.content)} bytes")
+            
             if 'image' not in content_type:
                 if not any(ext in image_url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
+                    print(f"    [下载失败] 非图片类型")
                     return None
             
             suffix = '.jpg'
@@ -87,28 +92,40 @@ class WeChatDraftPusher:
                         tmp_file.write(chunk)
                 tmp_path = tmp_file.name
             
+            print(f"    [保存成功] {tmp_path}")
             return tmp_path
             
         except Exception as e:
-            print(f"    [图片下载失败] {e}")
+            print(f"    [下载异常] {type(e).__name__}: {e}")
             return None
 
     def upload_cover_image(self, image_path: str) -> Optional[str]:
         """上传封面图片，返回 thumb_media_id"""
+        print(f"    [封面图] 开始处理: {image_path[:60] if image_path else 'None'}...")
+        
         token = self._get_access_token()
         if not token:
+            print(f"    [封面图] 获取 token 失败")
             return None
 
         temp_file = None
         actual_path = image_path
         
-        if image_path.startswith(('http://', 'https://')):
+        if image_path and image_path.startswith(('http://', 'https://')):
+            print(f"    [封面图] 检测到网络图片，开始下载...")
             temp_file = self._download_image(image_path)
             if temp_file:
                 actual_path = temp_file
+                print(f"    [封面图] 下载成功: {temp_file}")
             else:
+                print(f"    [封面图] 下载失败")
                 return None
-        elif not Path(image_path).exists():
+        elif image_path and not Path(image_path).exists():
+            print(f"    [封面图] 本地文件不存在: {image_path}")
+            return None
+
+        if not actual_path:
+            print(f"    [封面图] 无有效图片路径")
             return None
 
         url = f"https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={token}&type=image"
@@ -119,6 +136,8 @@ class WeChatDraftPusher:
                 resp = requests.post(url, files=files, timeout=30)
             
             result = resp.json()
+            print(f"    [封面图] 上传响应: {result}")
+            
             if 'media_id' in result:
                 print(f"✅ 封面图上传成功")
                 return result['media_id']

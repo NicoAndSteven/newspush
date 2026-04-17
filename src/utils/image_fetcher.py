@@ -89,6 +89,10 @@ class ImageFetcher:
             if images:
                 print(f"    [图片] RSS 提供 {len(images)} 张图片（已代理）")
         
+        # 如果已经有足够的图片，跳过后续步骤
+        if len(images) >= 2:
+            return images[:5]
+        
         # 第二优先级：newspaper3k 抓取所有图片
         if url and NEWSPAPER_AVAILABLE and len(images) < 2:
             np_images = await self.extract_newspaper_images(url)
@@ -99,7 +103,8 @@ class ImageFetcher:
                         images.append(proxied_img)
                         if len(images) >= 3:
                             break
-                print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片（已代理）")
+                if np_images:
+                    print(f"    [图片] newspaper3k 补充 {len(np_images)} 张图片")
         
         # 第三优先级：从原文抓 OG 图
         if url and len(images) < 2:
@@ -108,7 +113,7 @@ class ImageFetcher:
                 proxied_og = self._proxy_image_url(og_image)
                 if proxied_og not in images:
                     images.append(proxied_og)
-                    print(f"    [图片] 找到 OG 图（已代理）")
+                    print(f"    [图片] OG 图补充")
         
         # 第四优先级：Wikipedia 人物/地点图
         if analysis and len(images) < 3:
@@ -176,7 +181,12 @@ class ImageFetcher:
             return valid_images[:5]
             
         except Exception as e:
-            print(f"    [newspaper3k] 获取图片失败: {e}")
+            # 简化错误日志，只显示错误类型
+            error_msg = str(e)
+            if "Network is unreachable" in error_msg or "Connection" in error_msg:
+                pass  # 网络错误不打印，避免日志冗余
+            else:
+                print(f"    [newspaper3k] 获取图片失败: {type(e).__name__}")
             return []
     
     def _is_valid_image_url(self, url: str) -> bool:
@@ -229,7 +239,9 @@ class ImageFetcher:
                             return src
                         
         except Exception as e:
-            print(f"    [OG图提取失败] {e}")
+            error_msg = str(e)
+            if "Network is unreachable" not in error_msg and "Connection" not in error_msg:
+                print(f"    [OG图] 提取失败: {type(e).__name__}")
         
         return None
     
@@ -247,7 +259,9 @@ class ImageFetcher:
                             return thumbnail["source"]
         
         except Exception as e:
-            print(f"    [Wikipedia图获取失败] {entity}: {e}")
+            error_msg = str(e)
+            if "Network is unreachable" not in error_msg and "Connection" not in error_msg:
+                print(f"    [Wikipedia] 获取失败: {entity}")
         
         return None
     
@@ -279,7 +293,7 @@ class ImageFetcher:
                         return [p["src"]["large"] for p in photos]
         
         except Exception as e:
-            print(f"    [Pexels搜索失败] {e}")
+            print(f"    [Pexels] 搜索失败: {type(e).__name__}")
         
         return []
     
@@ -347,6 +361,10 @@ class ImageFetcherSync:
             if images:
                 print(f"    [图片] RSS 提供 {len(images)} 张图片（已代理）")
         
+        # 如果已经有足够的图片，跳过后续步骤（减少不必要的网络请求和错误日志）
+        if len(images) >= 2:
+            return images[:5]
+        
         # 第二优先级：newspaper3k（如果 RSS 图片不足）
         if url and NEWSPAPER_AVAILABLE and len(images) < 2:
             np_images = self.extract_newspaper_images(url)
@@ -357,7 +375,8 @@ class ImageFetcherSync:
                         images.append(proxied_img)
                         if len(images) >= 3:
                             break
-                print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片（已代理）")
+                if np_images:
+                    print(f"    [图片] newspaper3k 补充 {len(np_images)} 张图片")
         
         # 第三优先级：OG 图（如果图片不足）
         if url and len(images) < 2:
@@ -366,7 +385,7 @@ class ImageFetcherSync:
                 proxied_og = self._proxy_image_url(og_image)
                 if proxied_og not in images:
                     images.append(proxied_og)
-                    print(f"    [图片] 找到 OG 图（已代理）")
+                    print(f"    [图片] OG 图补充")
         
         # 第四优先级：Wikipedia
         if analysis and len(images) < 3:
@@ -379,7 +398,7 @@ class ImageFetcherSync:
                     proxied_wiki = self._proxy_image_url(wiki_img)
                     if proxied_wiki not in images:
                         images.append(proxied_wiki)
-                        print(f"    [图片] 找到 Wikipedia 图: {entity}")
+                        print(f"    [图片] Wikipedia 补充: {entity}")
         
         # 兜底：Pexels
         if len(images) < 1:
@@ -416,7 +435,9 @@ class ImageFetcherSync:
             return valid_images[:5]
             
         except Exception as e:
-            print(f"    [newspaper3k] 获取图片失败: {e}")
+            error_msg = str(e)
+            if "Network is unreachable" not in error_msg and "Connection" not in error_msg:
+                print(f"    [newspaper3k] 获取图片失败: {type(e).__name__}")
             return []
     
     def _is_valid_image_url(self, url: str) -> bool:
@@ -461,7 +482,9 @@ class ImageFetcherSync:
                 return twitter["content"]
             
         except Exception as e:
-            print(f"    [OG图提取失败] {e}")
+            error_msg = str(e)
+            if "Network is unreachable" not in error_msg and "Connection" not in error_msg:
+                print(f"    [OG图] 提取失败: {type(e).__name__}")
         
         return None
     
@@ -478,7 +501,9 @@ class ImageFetcherSync:
                     return thumbnail["source"]
         
         except Exception as e:
-            print(f"    [Wikipedia图获取失败] {entity}: {e}")
+            error_msg = str(e)
+            if "Network is unreachable" not in error_msg and "Connection" not in error_msg:
+                print(f"    [Wikipedia] 获取失败: {entity}")
         
         return None
     
@@ -510,7 +535,7 @@ class ImageFetcherSync:
                 return [p["src"]["large"] for p in photos]
         
         except Exception as e:
-            print(f"    [Pexels搜索失败] {e}")
+            print(f"    [Pexels] 搜索失败: {type(e).__name__}")
         
         return []
     
