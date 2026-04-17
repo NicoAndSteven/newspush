@@ -225,8 +225,15 @@ class NewsPushPipeline:
         
         return analyzed
     
-    def generate_commentary(self, analyzed_items, style: str = "balanced", max_generate: int = None):
-        """生成新闻点评文章（双版本输出：内部版 + 对外版）"""
+    def generate_commentary(self, analyzed_items, style: str = "balanced", max_generate: int = None, skip_files: bool = False):
+        """生成新闻点评（双版本）
+        
+        Args:
+            analyzed_items: 已分析的新闻列表
+            style: 写作风格
+            max_generate: 最大生成数量
+            skip_files: 是否跳过文件生成（微信推送时不需要生成 Markdown 和 Word）
+        """
         if not self.commentary_generator:
             print("未配置 AI，跳过点评生成")
             return []
@@ -329,47 +336,48 @@ class NewsPushPipeline:
                     images=images
                 )
                 
-                # 保存文件
-                timestamp = int(time.time())
-                safe_title = "".join(c for c in translated_title[:20] if c.isalnum() or c in (' ', '-', '_') or '\u4e00' <= c <= '\u9fff')
-                
-                # Markdown 文件（根据配置决定是否生成）
-                if config.GENERATE_MARKDOWN:
-                    public_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_public.md"
-                    with open(public_file, 'w', encoding='utf-8') as f:
-                        f.write(versions["public"])
-                    print(f"    [OK] Markdown: {public_file}")
-                
-                # 内部完整版（根据配置 + 敏感度决定是否生成）
-                if config.GENERATE_INTERNAL_VERSION and sensitivity_info.get('level') in ['high', 'medium']:
-                    internal_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_internal.md"
-                    with open(internal_file, 'w', encoding='utf-8') as f:
-                        f.write(versions["internal"])
-                    print(f"    [OK] 内部版: {internal_file}")
-                
-                # Word 文档（根据配置决定是否生成）
-                if config.GENERATE_WORD and DOCX_AVAILABLE:
-                    try:
-                        word_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_public.docx"
-                        core_facts = analysis.core_facts if hasattr(analysis, 'core_facts') else {}
-                        
-                        generate_word_directly(
-                            title=translated_title,
-                            summary=analysis.summary,
-                            core_facts=core_facts,
-                            key_points=analysis.key_points,
-                            background=analysis.background,
-                            impact_analysis=analysis.impact_analysis,
-                            unique_angle=analysis.unique_angle,
-                            controversial_aspects=analysis.controversial_aspects,
-                            expert_opinion=commentary,
-                            future_outlook=analysis.future_outlook,
-                            images=images,
-                            output_path=str(word_file)
-                        )
-                        print(f"    [OK] Word: {word_file}")
-                    except Exception as e:
-                        print(f"    [警告] Word 生成失败: {e}")
+                # 保存文件（如果配置了微信推送，则跳过文件生成）
+                if not skip_files:
+                    timestamp = int(time.time())
+                    safe_title = "".join(c for c in translated_title[:20] if c.isalnum() or c in (' ', '-', '_') or '\u4e00' <= c <= '\u9fff')
+                    
+                    # Markdown 文件（根据配置决定是否生成）
+                    if config.GENERATE_MARKDOWN:
+                        public_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_public.md"
+                        with open(public_file, 'w', encoding='utf-8') as f:
+                            f.write(versions["public"])
+                        print(f"    [OK] Markdown: {public_file}")
+                    
+                    # 内部完整版（根据配置 + 敏感度决定是否生成）
+                    if config.GENERATE_INTERNAL_VERSION and sensitivity_info.get('level') in ['high', 'medium']:
+                        internal_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_internal.md"
+                        with open(internal_file, 'w', encoding='utf-8') as f:
+                            f.write(versions["internal"])
+                        print(f"    [OK] 内部版: {internal_file}")
+                    
+                    # Word 文档（根据配置决定是否生成）
+                    if config.GENERATE_WORD and DOCX_AVAILABLE:
+                        try:
+                            word_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_public.docx"
+                            core_facts = analysis.core_facts if hasattr(analysis, 'core_facts') else {}
+                            
+                            generate_word_directly(
+                                title=translated_title,
+                                summary=analysis.summary,
+                                core_facts=core_facts,
+                                key_points=analysis.key_points,
+                                background=analysis.background,
+                                impact_analysis=analysis.impact_analysis,
+                                unique_angle=analysis.unique_angle,
+                                controversial_aspects=analysis.controversial_aspects,
+                                expert_opinion=commentary,
+                                future_outlook=analysis.future_outlook,
+                                images=images,
+                                output_path=str(word_file)
+                            )
+                            print(f"    [OK] Word: {word_file}")
+                        except Exception as e:
+                            print(f"    [警告] Word 生成失败: {e}")
                 
                 commentaries.append({
                     "news": item["news"],
@@ -429,7 +437,8 @@ class NewsPushPipeline:
         
         analyzed = self.deep_analyze_news(news_items, AnalysisDepth.DEEP, max_analyze)
         
-        commentaries = self.generate_commentary(analyzed, max_generate=max_generate)
+        # 如果配置了微信推送，则跳过 Markdown 和 Word 文件生成
+        commentaries = self.generate_commentary(analyzed, max_generate=max_generate, skip_files=send_email)
         
         print("\n" + "=" * 70)
         print("📊 执行统计:")
@@ -457,13 +466,20 @@ class NewsPushPipeline:
                 print(f"\n  新闻源: {news_url}")
                 print(f"  标题: {title[:40]}...")
                 
-                # 尝试获取封面图（优先使用之前获取的图片URL）
+                # 封面图使用第一张（新闻源图片）
+                # 正文图片使用剩余的（Pexels 补充）
                 if images:
-                    cover_image = images[0]
+                    cover_image = images[0]  # 封面图
+                    content_images = images[1:] if len(images) > 1 else []  # 正文图片
                     print(f"  封面图: {cover_image[:60]}...")
+                    if content_images:
+                        print(f"  正文图片: {len(content_images)} 张")
+                else:
+                    cover_image = None
+                    content_images = []
                 
-                # 推送到微信（传递封面图和内容图片）
-                if push_article_to_wechat(title, content, cover_image, images):
+                # 推送到微信（封面图 + 正文图片）
+                if push_article_to_wechat(title, content, cover_image, content_images):
                     pushed_count += 1
                     print(f"  [OK] 推送成功")
                 else:

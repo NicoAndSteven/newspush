@@ -66,19 +66,16 @@ class ImageFetcher:
         获取文章配图（分层策略）
         
         优先级：
-        1. RSS 提供的图片（通过代理）- 最优先
-        2. newspaper3k 抓取的所有图片（通过代理转换）
-        3. OG 图（原文配图，通过代理转换）
-        4. Wikipedia 图片（人物/地点）
-        5. Pexels 关键词搜索（兜底）
+        1. RSS 提供的图片（通过代理）- 作为封面
+        2. 如果新闻源图片不足，用 Pexels 补充正文图片
         
         Returns:
-            List[str]: 图片URL列表（最多5张）
+            List[str]: 图片URL列表（第1张为封面，其余为正文配图）
         """
         images = []
-        url = news_item.get("url", "")
+        cover_image = None
         
-        # 第一优先级：RSS 提供的图片（通过代理转换）
+        # 第一优先级：RSS 提供的图片（作为封面）
         rss_images = news_item.get("images", [])
         if rss_images:
             for img_url in rss_images:
@@ -87,49 +84,11 @@ class ImageFetcher:
                     if proxied_img not in images:
                         images.append(proxied_img)
             if images:
-                print(f"    [图片] RSS 提供 {len(images)} 张图片（已代理）")
+                cover_image = images[0]  # 第一张作为封面
+                print(f"    [图片] 新闻源提供 {len(images)} 张图片（已代理）")
         
-        # 如果已经有足够的图片，跳过后续步骤
-        if len(images) >= 2:
-            return images[:5]
-        
-        # 第二优先级：newspaper3k 抓取所有图片
-        if url and NEWSPAPER_AVAILABLE and len(images) < 2:
-            np_images = await self.extract_newspaper_images(url)
-            if np_images:
-                for img_url in np_images:
-                    proxied_img = self._proxy_image_url(img_url)
-                    if proxied_img not in images:
-                        images.append(proxied_img)
-                        if len(images) >= 3:
-                            break
-                if np_images:
-                    print(f"    [图片] newspaper3k 补充 {len(np_images)} 张图片")
-        
-        # 第三优先级：从原文抓 OG 图
-        if url and len(images) < 2:
-            og_image = await self.extract_og_image(url)
-            if og_image:
-                proxied_og = self._proxy_image_url(og_image)
-                if proxied_og not in images:
-                    images.append(proxied_og)
-                    print(f"    [图片] OG 图补充")
-        
-        # 第四优先级：Wikipedia 人物/地点图
-        if analysis and len(images) < 3:
-            entities = self._extract_entities(analysis)
-            for entity in entities[:2]:
-                if len(images) >= 3:
-                    break
-                wiki_img = await self.get_wikipedia_image(entity)
-                if wiki_img:
-                    proxied_wiki = self._proxy_image_url(wiki_img)
-                    if proxied_wiki not in images:
-                        images.append(proxied_wiki)
-                        print(f"    [图片] 找到 Wikipedia 图: {entity}")
-        
-        # 兜底：Pexels 关键词搜索
-        if len(images) < 1:
+        # 如果新闻源图片不足，用 Pexels 补充正文图片
+        if len(images) < 3:
             tags = analysis.get("tags", []) if analysis else []
             if not tags and news_item.get("title"):
                 tags = news_item["title"].split()[:3]
@@ -138,10 +97,10 @@ class ImageFetcher:
                 for img in pexels_imgs:
                     if img not in images:
                         images.append(img)
-                        if len(images) >= 2:
+                        if len(images) >= 3:  # 总共3张图片
                             break
                 if pexels_imgs:
-                    print(f"    [图片] 找到 Pexels 图")
+                    print(f"    [图片] Pexels 补充 {min(len(pexels_imgs), 3 - len(images))} 张图片")
         
         return images[:5]
     
@@ -341,16 +300,16 @@ class ImageFetcherSync:
         """获取文章配图（同步版本）
         
         优先级：
-        1. RSS 提供的图片（通过代理）- 最优先，因为服务器可以访问
-        2. newspaper3k 抓取的图片（通过代理）
-        3. OG 图（通过代理）
-        4. Wikipedia 图片
-        5. Pexels（兜底）
+        1. RSS 提供的图片（通过代理）- 作为封面
+        2. 如果新闻源图片不足，用 Pexels 补充正文图片
+        
+        Returns:
+            List[str]: 图片URL列表（第1张为封面，其余为正文配图）
         """
         images = []
-        url = news_item.get("url", "")
+        cover_image = None
         
-        # 第一优先级：RSS 提供的图片（通过代理转换）
+        # 第一优先级：RSS 提供的图片（作为封面）
         rss_images = news_item.get("images", [])
         if rss_images:
             for img_url in rss_images:
@@ -359,49 +318,11 @@ class ImageFetcherSync:
                     if proxied_img not in images:
                         images.append(proxied_img)
             if images:
-                print(f"    [图片] RSS 提供 {len(images)} 张图片（已代理）")
+                cover_image = images[0]  # 第一张作为封面
+                print(f"    [图片] 新闻源提供 {len(images)} 张图片（已代理）")
         
-        # 如果已经有足够的图片，跳过后续步骤（减少不必要的网络请求和错误日志）
-        if len(images) >= 2:
-            return images[:5]
-        
-        # 第二优先级：newspaper3k（如果 RSS 图片不足）
-        if url and NEWSPAPER_AVAILABLE and len(images) < 2:
-            np_images = self.extract_newspaper_images(url)
-            if np_images:
-                for img_url in np_images:
-                    proxied_img = self._proxy_image_url(img_url)
-                    if proxied_img not in images:
-                        images.append(proxied_img)
-                        if len(images) >= 3:
-                            break
-                if np_images:
-                    print(f"    [图片] newspaper3k 补充 {len(np_images)} 张图片")
-        
-        # 第三优先级：OG 图（如果图片不足）
-        if url and len(images) < 2:
-            og_image = self.extract_og_image(url)
-            if og_image:
-                proxied_og = self._proxy_image_url(og_image)
-                if proxied_og not in images:
-                    images.append(proxied_og)
-                    print(f"    [图片] OG 图补充")
-        
-        # 第四优先级：Wikipedia
-        if analysis and len(images) < 3:
-            entities = self._extract_entities(analysis)
-            for entity in entities[:2]:
-                if len(images) >= 3:
-                    break
-                wiki_img = self.get_wikipedia_image(entity)
-                if wiki_img:
-                    proxied_wiki = self._proxy_image_url(wiki_img)
-                    if proxied_wiki not in images:
-                        images.append(proxied_wiki)
-                        print(f"    [图片] Wikipedia 补充: {entity}")
-        
-        # 兜底：Pexels
-        if len(images) < 1:
+        # 如果新闻源图片不足，用 Pexels 补充正文图片
+        if len(images) < 3:
             tags = analysis.get("tags", []) if analysis else []
             if not tags and news_item.get("title"):
                 tags = news_item["title"].split()[:3]
@@ -410,10 +331,10 @@ class ImageFetcherSync:
                 for img in pexels_imgs:
                     if img not in images:
                         images.append(img)
-                        if len(images) >= 2:
+                        if len(images) >= 3:  # 总共3张图片
                             break
                 if pexels_imgs:
-                    print(f"    [图片] 找到 Pexels 图")
+                    print(f"    [图片] Pexels 补充 {min(len(pexels_imgs), 3 - len(images))} 张图片")
         
         return images[:5]
     

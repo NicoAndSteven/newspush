@@ -158,6 +158,10 @@ class OutputFormatter:
         - 轻松幽默的专栏风格
         - 结构自然流畅，无生硬小标题
         - 适合直接发布
+        
+        图片说明：
+        - images[0] 为封面图（不在正文中显示）
+        - images[1:] 为正文配图
         """
         images = images or []
         
@@ -171,17 +175,17 @@ class OutputFormatter:
         if stage2_analysis.get('expert_opinion'):
             md += f"{stage2_analysis['expert_opinion']}\n\n"
         
-        # 配图穿插（正文图片，从第1张开始）
-        if images:
-            md += f"![配图]({images[0]})\n\n"
+        # 正文配图（从第2张开始，第1张是封面）
+        if len(images) > 1:
+            md += f"![配图]({images[1]})\n\n"
         
         # 背景补充（如果有）
         if stage2_analysis.get('background'):
             md += f"{stage2_analysis['background']}\n\n"
         
-        # 第二张配图（如果有）
-        if len(images) > 1:
-            md += f"![配图]({images[1]})\n\n"
+        # 第二张正文配图（如果有）
+        if len(images) > 2:
+            md += f"![配图]({images[2]})\n\n"
         
         # 影响分析（如果有）
         if stage2_analysis.get('impact_analysis'):
