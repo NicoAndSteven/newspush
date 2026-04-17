@@ -316,30 +316,54 @@ class WeChatDraftPusher:
             flags=re.MULTILINE
         )
         
-        # 转换段落（双换行）
+        # 转换段落（双换行或单换行）
+        # 先按双换行分割
         paragraphs = processed_text.split('\n\n')
         formatted_paragraphs = []
+        
         for p in paragraphs:
             p = p.strip()
             if not p:
                 continue
+            
             # 如果已经是HTML标签开头，不包裹p标签
             if p.startswith(('<h2', '<h3', '<ul', '<blockquote', '<hr', '<img')):
                 formatted_paragraphs.append(p)
             else:
-                # 单换行转<br>
-                p = p.replace('\n', '<br/>')
-                formatted_paragraphs.append(f'<p style="margin:15px 0;line-height:1.8;text-align:justify;color:#333;">{p}</p>')
+                # 检查是否是长段落，如果是则尝试按句子分割
+                if len(p) > 300:
+                    # 按句号分割，每2-3个句子为一段
+                    sentences = re.split(r'([。！？])', p)
+                    combined = []
+                    current = ""
+                    sentence_count = 0
+                    
+                    for i in range(0, len(sentences) - 1, 2):
+                        sentence = sentences[i] + (sentences[i+1] if i+1 < len(sentences) else "")
+                        current += sentence
+                        sentence_count += 1
+                        
+                        if sentence_count >= 2 and len(current) > 100:
+                            combined.append(current.strip())
+                            current = ""
+                            sentence_count = 0
+                    
+                    if current.strip():
+                        combined.append(current.strip())
+                    
+                    # 为每个子段落创建p标签
+                    for sub_p in combined:
+                        formatted_paragraphs.append(f'<p style="margin:15px 0;line-height:2;text-align:justify;color:#333;text-indent:2em;">{sub_p}</p>')
+                else:
+                    # 短段落直接包裹
+                    formatted_paragraphs.append(f'<p style="margin:15px 0;line-height:2;text-align:justify;color:#333;text-indent:2em;">{p}</p>')
         
         content = '\n'.join(formatted_paragraphs)
         
         # 微信文章整体样式
         return f'''
-<section style="font-size:16px;line-height:1.8;color:#333;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;padding:20px 15px;max-width:100%;word-wrap:break-word;">
+<section style="font-size:16px;line-height:2;color:#333;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;padding:20px 15px;max-width:100%;word-wrap:break-word;">
     {content}
-</section>
-<section style="margin-top:30px;padding-top:20px;border-top:1px solid #eee;text-align:center;color:#999;font-size:12px;">
-    <p>本文由 NewsPush 自动生成</p>
 </section>
         '''
 
@@ -384,7 +408,7 @@ class WeChatDraftPusher:
         article = {
             "articles": [{
                 "title": title,
-                "author": "NewsPush",
+                "author": "垣钰",
                 "digest": title[:80] + "..." if len(title) > 80 else title,
                 "content": content_html,
                 "thumb_media_id": thumb_media_id or "",
