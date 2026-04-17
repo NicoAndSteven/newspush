@@ -15,18 +15,14 @@ class Config:
     DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY") or ""
     
     RSS_SOURCES = [
-    # BBC World News（图片抓取效果很好）
-    "https://rsshub.app/bbc/world",
+        "https://rss.ovh/bbc/world",  # 社区实例 - BBC
+        "https://rss.ovh/guardian/world",  # Guardian
+        "https://rss.ovh/aljazeera/english/news",  # Al Jazeera
+        "https://rss.ovh/ft/world",  # FT
 
-    # The Guardian World News（图片抓取效果很好）
-    "https://rsshub.app/guardian/world",
-
-    # Al Jazeera（半岛电视台，全英文或阿拉伯文，图片效果不错）
-    "https://rsshub.app/aljazeera/english/news",
-
-    # Financial Times（金融时报，图片抓取效果较好）
-    # FT 官方 RSS 限制较多，RSSHub 提供 myFT 个人版或通用路由，这里用通用世界新闻路由
-    "https://rsshub.app/ft/world",
+        # 备选（如果上面不行）
+        "https://rsshub.rssforever.com/bbc/world",
+        "https://rsshub.netlify.app/bbc/world",
 ]
     
     MAX_NEWS_PER_SOURCE = int(os.getenv("MAX_NEWS_PER_SOURCE", "5"))
