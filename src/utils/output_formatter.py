@@ -163,10 +163,6 @@ class OutputFormatter:
         
         md = f"# {news_title}\n\n"
         
-        # 封面图
-        if images:
-            md += f"![封面]({images[0]})\n\n"
-        
         # 导语
         if stage2_analysis.get('summary'):
             md += f"{stage2_analysis['summary']}\n\n"
@@ -175,16 +171,17 @@ class OutputFormatter:
         if stage2_analysis.get('expert_opinion'):
             md += f"{stage2_analysis['expert_opinion']}\n\n"
         
-        # 配图穿插
-        if len(images) > 1:
-            md += f"![配图]({images[1]})\n\n"
+        # 配图穿插（正文图片，从第1张开始）
+        if images:
+            md += f"![配图]({images[0]})\n\n"
         
         # 背景补充（如果有）
         if stage2_analysis.get('background'):
             md += f"{stage2_analysis['background']}\n\n"
         
-        if len(images) > 2:
-            md += f"![配图]({images[2]})\n\n"
+        # 第二张配图（如果有）
+        if len(images) > 1:
+            md += f"![配图]({images[1]})\n\n"
         
         # 影响分析（如果有）
         if stage2_analysis.get('impact_analysis'):

@@ -442,21 +442,25 @@ class NewsPushPipeline:
                 images = item.get('images', [])  # 使用之前保存的图片URL
                 
                 title = getattr(news, 'title', '未命名文章') if news else '未命名文章'
+                news_url = getattr(news, 'link', '') if news else ''
                 content = versions.get('public', '')
                 cover_image = None
+                
+                # 显示新闻源信息
+                print(f"\n  新闻源: {news_url}")
+                print(f"  标题: {title[:40]}...")
                 
                 # 尝试获取封面图（优先使用之前获取的图片URL）
                 if images:
                     cover_image = images[0]
-                    print(f"  使用封面图: {cover_image[:50]}...")
-                    print(f"  内容图片: {len(images)} 张")
+                    print(f"  封面图: {cover_image[:60]}...")
                 
                 # 推送到微信（传递封面图和内容图片）
                 if push_article_to_wechat(title, content, cover_image, images):
                     pushed_count += 1
-                    print(f"  [OK] 推送成功: {title[:30]}...")
+                    print(f"  [OK] 推送成功")
                 else:
-                    print(f"  [跳过] 推送失败: {title[:30]}...")
+                    print(f"  [跳过] 推送失败")
             
             if pushed_count > 0:
                 print(f"  [完成] 成功推送 {pushed_count} 篇文章到草稿箱")

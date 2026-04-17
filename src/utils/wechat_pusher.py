@@ -373,6 +373,12 @@ class WeChatDraftPusher:
         if not token:
             return False
 
+        # 微信标题限制：最多 64 个字符
+        max_title_length = 60  # 留点余量
+        if len(title) > max_title_length:
+            title = title[:max_title_length] + "..."
+            print(f"    [标题] 已截断为 {max_title_length} 字符")
+
         url = f"https://api.weixin.qq.com/cgi-bin/draft/add?access_token={token}"
 
         article = {
