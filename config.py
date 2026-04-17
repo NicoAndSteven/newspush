@@ -2,7 +2,15 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# 获取当前文件所在目录
+BASE_DIR = Path(__file__).parent
+
+# 加载 .env 文件（从当前目录和父目录查找）
+env_file = BASE_DIR / ".env"
+if env_file.exists():
+    load_dotenv(env_file)
+else:
+    load_dotenv()
 
 class Config:
     BASE_DIR = Path(__file__).parent
@@ -12,7 +20,8 @@ class Config:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     
-    DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY") or ""
+    # 从环境变量获取 API Key（支持 DASHSCOPE_API_KEY 和 OPENAI_API_KEY）
+    DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
 
     RSS_SOURCES = [
         # BBC 世界新闻

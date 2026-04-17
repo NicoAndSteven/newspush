@@ -114,14 +114,9 @@ class DeepNewsAnalyzer:
             # 阿里云百炼 API
             try:
                 from openai import OpenAI
-                # 设置超时：连接10秒，读取120秒（AI生成需要较长时间）
-                http_client = httpx.Client(
-                    timeout=httpx.Timeout(120.0, connect=10.0)
-                )
                 self.client = OpenAI(
                     api_key=self.api_key,
-                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                    http_client=http_client
+                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
                 )
                 self.model = self.model or "qwen3.6-plus"
                 print(f"  [DEBUG] 阿里云百炼客户端初始化成功，模型: {self.model}")
