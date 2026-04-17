@@ -14,7 +14,7 @@ print(f"[LOG] Python 版本: {sys.version}")
 print(f"[LOG] 工作目录: {os.getcwd()}")
 
 print("[LOG] 步骤1: 加载环境变量...")
-load_dotenv()
+load_dotenv(override=True)
 print("[LOG] 步骤1: 完成")
 
 print("[LOG] 步骤2: 下载 nltk 数据（newspaper3k 需要）...")

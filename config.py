@@ -8,9 +8,9 @@ BASE_DIR = Path(__file__).parent
 # 加载 .env 文件（从当前目录和父目录查找）
 env_file = BASE_DIR / ".env"
 if env_file.exists():
-    load_dotenv(env_file)
+    load_dotenv(env_file, override=True)
 else:
-    load_dotenv()
+    load_dotenv(override=True)
 
 class Config:
     BASE_DIR = Path(__file__).parent
