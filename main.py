@@ -278,8 +278,9 @@ class NewsPushPipeline:
                 print(f"    获取配图...")
                 news_dict = {
                     "title": item['news'].title,
-                    "url": getattr(item['news'], 'link', ''),  # NewsItem 使用 link 而不是 url
-                    "description": getattr(item['news'], 'description', '')
+                    "url": getattr(item['news'], 'link', ''),
+                    "description": getattr(item['news'], 'description', ''),
+                    "images": getattr(item['news'], 'images', [])  # RSS 提供的图片
                 }
                 analysis_dict = analysis.to_dict() if hasattr(analysis, 'to_dict') else {}
                 images = self.image_fetcher.get_article_images(news_dict, analysis_dict)
@@ -326,32 +327,28 @@ class NewsPushPipeline:
                 
                 # 保存文件
                 timestamp = int(time.time())
-                # 使用翻译后的标题生成文件名
                 safe_title = "".join(c for c in translated_title[:20] if c.isalnum() or c in (' ', '-', '_') or '\u4e00' <= c <= '\u9fff')
                 
-                # 对外发布版
-                public_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_public.md"
-                with open(public_file, 'w', encoding='utf-8') as f:
-                    f.write(versions["public"])
-                print(f"    [OK] 对外版: {public_file}")
+                # Markdown 文件（根据配置决定是否生成）
+                if config.GENERATE_MARKDOWN:
+                    public_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_public.md"
+                    with open(public_file, 'w', encoding='utf-8') as f:
+                        f.write(versions["public"])
+                    print(f"    [OK] Markdown: {public_file}")
                 
-                # 内部完整版（高敏感新闻才生成）
-                if sensitivity_info.get('level') in ['high', 'medium']:
+                # 内部完整版（根据配置 + 敏感度决定是否生成）
+                if config.GENERATE_INTERNAL_VERSION and sensitivity_info.get('level') in ['high', 'medium']:
                     internal_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_internal.md"
                     with open(internal_file, 'w', encoding='utf-8') as f:
                         f.write(versions["internal"])
                     print(f"    [OK] 内部版: {internal_file}")
                 
-                # 生成 Word 文档（直接生成，不经过 Markdown 转换）
-                if DOCX_AVAILABLE:
+                # Word 文档（根据配置决定是否生成）
+                if config.GENERATE_WORD and DOCX_AVAILABLE:
                     try:
-                        print(f"    生成 Word 文档...")
                         word_file = self.results_dir / f"commentary_{timestamp}_{safe_title}_public.docx"
-                        
-                        # 提取核心事实
                         core_facts = analysis.core_facts if hasattr(analysis, 'core_facts') else {}
                         
-                        # 直接生成 Word 文档
                         generate_word_directly(
                             title=translated_title,
                             summary=analysis.summary,
@@ -361,7 +358,7 @@ class NewsPushPipeline:
                             impact_analysis=analysis.impact_analysis,
                             unique_angle=analysis.unique_angle,
                             controversial_aspects=analysis.controversial_aspects,
-                            expert_opinion=commentary,  # 使用生成的点评
+                            expert_opinion=commentary,
                             future_outlook=analysis.future_outlook,
                             images=images,
                             output_path=str(word_file)
@@ -451,9 +448,11 @@ class NewsPushPipeline:
                 # 尝试获取封面图（优先使用之前获取的图片URL）
                 if images:
                     cover_image = images[0]
-                    print(f"  使用配图: {cover_image[:50]}...")
+                    print(f"  使用封面图: {cover_image[:50]}...")
+                    print(f"  内容图片: {len(images)} 张")
                 
-                if push_article_to_wechat(title, content, cover_image):
+                # 推送到微信（传递封面图和内容图片）
+                if push_article_to_wechat(title, content, cover_image, images):
                     pushed_count += 1
                     print(f"  [OK] 推送成功: {title[:30]}...")
                 else:

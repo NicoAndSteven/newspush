@@ -44,5 +44,10 @@ class Config:
     WECHAT_SECRET = os.getenv("WECHAT_SECRET") or ""
     
     CLEANUP_AFTER_SEND = os.getenv("CLEANUP_AFTER_SEND", "true").lower() == "true"
+    
+    # 输出文件配置（可控制生成哪些文件）
+    GENERATE_MARKDOWN = os.getenv("GENERATE_MARKDOWN", "true").lower() == "true"
+    GENERATE_WORD = os.getenv("GENERATE_WORD", "false").lower() == "true"
+    GENERATE_INTERNAL_VERSION = os.getenv("GENERATE_INTERNAL_VERSION", "false").lower() == "true"
 
 config = Config()

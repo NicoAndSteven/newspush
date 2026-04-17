@@ -22,7 +22,7 @@ class ImageFetcher:
     """智能图片获取器"""
     
     # 图片代理服务配置
-    IMAGE_PROXY_URL = "https://images.weserv.nl/?url="
+    IMAGE_PROXY_URL = "https://wsrv.nl/?url="
     
     def __init__(self):
         self.pexels_api_key = os.getenv("PEXELS_API_KEY", "")
@@ -299,7 +299,7 @@ class ImageFetcher:
 class ImageFetcherSync:
     """同步版本的图片获取器"""
     
-    IMAGE_PROXY_URL = "https://images.weserv.nl/?url="
+    IMAGE_PROXY_URL = "https://wsrv.nl/?url="
     
     def __init__(self):
         self.pexels_api_key = os.getenv("PEXELS_API_KEY", "")
