@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
+import tempfile
+import os
 
 class WeChatDraftPusher:
     """微信公众号 - 草稿箱推送"""
@@ -46,22 +48,99 @@ class WeChatDraftPusher:
             print(f"❌ 获取 access_token 异常: {e}")
             return None
 
+    def _download_image(self, image_url: str) -> Optional[str]:
+        """
+        下载网络图片到临时文件
+        
+        Args:
+            image_url: 图片URL
+            
+        Returns:
+            str: 本地临时文件路径 或 None
+        """
+        if not image_url:
+            return None
+            
+        # 如果已经是本地路径，直接返回
+        if Path(image_url).exists():
+            return image_url
+        
+        # 检查是否是有效的URL
+        if not image_url.startswith(('http://', 'https://')):
+            print(f"⚠️  无效的图片URL: {image_url}")
+            return None
+        
+        try:
+            print(f"    正在下载封面图: {image_url[:50]}...")
+            response = requests.get(image_url, timeout=15, stream=True)
+            
+            if response.status_code != 200:
+                print(f"⚠️  下载图片失败，状态码: {response.status_code}")
+                return None
+            
+            # 检查Content-Type
+            content_type = response.headers.get('content-type', '')
+            if 'image' not in content_type:
+                # 尝试从URL判断
+                if not any(ext in image_url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
+                    print(f"⚠️  不是有效的图片: {content_type}")
+                    return None
+            
+            # 保存到临时文件
+            suffix = '.jpg'
+            if '.png' in image_url.lower():
+                suffix = '.png'
+            elif '.gif' in image_url.lower():
+                suffix = '.gif'
+            elif '.webp' in image_url.lower():
+                suffix = '.webp'
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        tmp_file.write(chunk)
+                tmp_path = tmp_file.name
+            
+            print(f"    图片下载成功: {tmp_path}")
+            return tmp_path
+            
+        except Exception as e:
+            print(f"⚠️  下载图片异常: {e}")
+            return None
+
     def upload_cover_image(self, image_path: str) -> Optional[str]:
-        """上传封面图片，返回 thumb_media_id"""
+        """
+        上传封面图片，返回 thumb_media_id
+        支持本地路径或网络URL
+        """
         token = self._get_access_token()
         if not token:
+            return None
+
+        # 处理网络URL - 先下载到本地
+        temp_file = None
+        actual_path = image_path
+        
+        if image_path.startswith(('http://', 'https://')):
+            temp_file = self._download_image(image_path)
+            if temp_file:
+                actual_path = temp_file
+            else:
+                return None
+        elif not Path(image_path).exists():
+            print(f"⚠️  图片路径不存在: {image_path}")
             return None
 
         url = f"https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={token}&type=image"
 
         try:
-            with open(image_path, 'rb') as f:
-                files = {'media': (Path(image_path).name, f, 'image/jpeg')}
+            with open(actual_path, 'rb') as f:
+                files = {'media': (Path(actual_path).name, f, 'image/jpeg')}
                 resp = requests.post(url, files=files, timeout=30)
             
             result = resp.json()
             if 'media_id' in result:
-                print(f"✅ 封面图上传成功 → {result['media_id']}")
+                print(f"✅ 封面图上传成功 → {result['media_id'][:20]}...")
                 return result['media_id']
             else:
                 print(f"❌ 封面图上传失败: {result}")
@@ -69,6 +148,13 @@ class WeChatDraftPusher:
         except Exception as e:
             print(f"❌ 上传封面图异常: {e}")
             return None
+        finally:
+            # 清理临时文件
+            if temp_file and Path(temp_file).exists():
+                try:
+                    os.unlink(temp_file)
+                except:
+                    pass
 
     def markdown_to_wechat_html(self, markdown_text: str) -> str:
         """简单 Markdown 转微信 HTML（可后续继续优化）"""
@@ -89,19 +175,23 @@ class WeChatDraftPusher:
     def push_to_draft(self, title: str, markdown_content: str, cover_image_path: str = None) -> bool:
         """
         主函数：把一篇文章推送到微信公众号草稿箱
+        
+        Args:
+            title: 文章标题
+            markdown_content: Markdown 格式内容
+            cover_image_path: 封面图路径（本地路径或网络URL）
         """
         if not self.appid or not self.secret:
             print("❌ 请先在 .env 中配置 WECHAT_APPID 和 WECHAT_SECRET")
             return False
 
-        # 1. 处理封面图（如果没有则使用默认）
+        # 1. 处理封面图（支持本地路径或网络URL）
         thumb_media_id = None
-        if cover_image_path and Path(cover_image_path).exists():
+        if cover_image_path:
             thumb_media_id = self.upload_cover_image(cover_image_path)
         
         if not thumb_media_id:
-            print("⚠️  未找到有效封面图，将使用默认封面（可能失败）")
-            # 这里可以放一个默认图片的 media_id，后续可优化
+            print("⚠️  未找到有效封面图，将尝试无封面推送（可能失败）")
 
         # 2. 转换内容为微信 HTML
         content_html = self.markdown_to_wechat_html(markdown_content)
@@ -145,7 +235,14 @@ class WeChatDraftPusher:
 
 # ====================== 对外调用函数 ======================
 def push_article_to_wechat(title: str, markdown_content: str, cover_image_path: str = None) -> bool:
-    """对外统一调用接口"""
+    """
+    对外统一调用接口
+    
+    Args:
+        title: 文章标题
+        markdown_content: Markdown 格式内容
+        cover_image_path: 封面图路径（本地路径或网络URL，如 Pexels 图片链接）
+    """
     pusher = WeChatDraftPusher()
     return pusher.push_to_draft(title, markdown_content, cover_image_path)
 

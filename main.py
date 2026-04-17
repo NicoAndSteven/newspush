@@ -348,7 +348,8 @@ class NewsPushPipeline:
                     "analysis": analysis,
                     "commentary": commentary,
                     "versions": versions,
-                    "sensitivity": sensitivity_info
+                    "sensitivity": sensitivity_info,
+                    "images": images  # 保存图片URL供微信推送使用
                 })
                 
                 generated_count += 1
@@ -414,15 +415,16 @@ class NewsPushPipeline:
             for item in commentaries:
                 news = item.get('news')
                 versions = item.get('versions', {})
+                images = item.get('images', [])  # 使用之前保存的图片URL
                 
                 title = getattr(news, 'title', '未命名文章') if news else '未命名文章'
                 content = versions.get('public', '')
                 cover_image = None
                 
-                # 尝试获取封面图
-                images = getattr(news, 'images', []) if news else []
+                # 尝试获取封面图（优先使用之前获取的图片URL）
                 if images:
                     cover_image = images[0]
+                    print(f"  使用配图: {cover_image[:50]}...")
                 
                 if push_article_to_wechat(title, content, cover_image):
                     pushed_count += 1
