@@ -1,6 +1,7 @@
 """
 智能图片获取模块
 分层配图策略：newspaper3k > OG图 > Wikipedia > Pexels
+支持图片代理，解决国内访问外网图片问题
 """
 import aiohttp
 import asyncio
@@ -20,21 +21,55 @@ except ImportError:
 class ImageFetcher:
     """智能图片获取器"""
     
+    # 图片代理服务配置
+    IMAGE_PROXY_URL = "https://images.weserv.nl/?url="
+    
     def __init__(self):
         self.pexels_api_key = os.getenv("PEXELS_API_KEY", "")
         self.pixabay_api_key = os.getenv("PIXABAY_API_KEY", "")
+        # 是否启用图片代理
+        self.enable_image_proxy = os.getenv("ENABLE_IMAGE_PROXY", "true").lower() == "true"
+    
+    def _proxy_image_url(self, img_url: str) -> str:
+        """
+        将外网图片 URL 转换为代理 URL
+        
+        Args:
+            img_url: 原始图片 URL
+            
+        Returns:
+            str: 代理后的图片 URL
+        """
+        if not self.enable_image_proxy:
+            return img_url
+        
+        # 如果已经是代理 URL，直接返回
+        if img_url.startswith(self.IMAGE_PROXY_URL):
+            return img_url
+        
+        # 如果已经是国内可访问的 URL，直接返回
+        if any(domain in img_url.lower() for domain in [
+            'pexels.com', 'pixabay.com', 'aliyun', 'alicdn.com',
+            'wechat', 'qq.com', 'baidu.com', 'zhihu.com'
+        ]):
+            return img_url
+        
+        # 使用代理服务
+        # 移除协议头，因为 weserv 会自动处理
+        clean_url = img_url.replace('https://', '').replace('http://', '')
+        proxied_url = f"{self.IMAGE_PROXY_URL}{clean_url}"
+        
+        return proxied_url
     
     async def get_article_images(self, news_item: dict, analysis: dict = None) -> List[str]:
         """
         获取文章配图（分层策略）
         
         优先级：
-        1. newspaper3k 抓取的所有图片
-        2. OG 图（原文配图）
+        1. newspaper3k 抓取的所有图片（通过代理转换）
+        2. OG 图（原文配图，通过代理转换）
         3. Wikipedia 图片（人物/地点）
         4. Pexels 关键词搜索（兜底）
-        
-        回退逻辑：如果newspaper3k失败或图片不足，自动尝试其他来源
         
         Returns:
             List[str]: 图片URL列表（最多5张）
@@ -47,36 +82,40 @@ class ImageFetcher:
         if url and NEWSPAPER_AVAILABLE:
             np_images = await self.extract_newspaper_images(url)
             if np_images:
-                images.extend(np_images)
+                # 转换图片 URL 为代理 URL
+                proxied_images = [self._proxy_image_url(img) for img in np_images]
+                images.extend(proxied_images)
                 np_success = True
-                print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片")
+                print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片（已代理）")
         
         # 第二优先级：从原文抓 OG 图
-        # 如果newspaper3k失败或图片不足(少于2张)，尝试OG图
         if url and (not np_success or len(images) < 2):
             og_image = await self.extract_og_image(url)
-            if og_image and og_image not in images:
-                images.append(og_image)
-                print(f"    [图片] 找到 OG 图")
+            if og_image:
+                # 转换 OG 图为代理 URL
+                proxied_og = self._proxy_image_url(og_image)
+                if proxied_og not in images:
+                    images.append(proxied_og)
+                    print(f"    [图片] 找到 OG 图（已代理）")
         
         # 第三优先级：Wikipedia 人物/地点图
-        # 如果图片不足，尝试Wikipedia
         if analysis and len(images) < 3:
             entities = self._extract_entities(analysis)
             for entity in entities[:2]:
                 if len(images) >= 3:
                     break
                 wiki_img = await self.get_wikipedia_image(entity)
-                if wiki_img and wiki_img not in images:
-                    images.append(wiki_img)
-                    print(f"    [图片] 找到 Wikipedia 图: {entity}")
+                if wiki_img:
+                    # Wikipedia 图片通常可以访问，但也可以代理
+                    proxied_wiki = self._proxy_image_url(wiki_img)
+                    if proxied_wiki not in images:
+                        images.append(proxied_wiki)
+                        print(f"    [图片] 找到 Wikipedia 图: {entity}")
         
         # 兜底：Pexels 关键词搜索
-        # 如果图片不足2张，使用Pexels兜底
         if len(images) < 2:
             tags = analysis.get("tags", []) if analysis else []
             if not tags and news_item.get("title"):
-                # 如果没有tags，从标题提取关键词
                 tags = news_item["title"].split()[:3]
             if tags:
                 pexels_imgs = await self.search_pexels(tags[:3])
@@ -88,14 +127,14 @@ class ImageFetcher:
                 if pexels_imgs:
                     print(f"    [图片] 找到 Pexels 图")
         
-        return images[:5]  # 最多5张
+        return images[:5]
     
     async def extract_newspaper_images(self, url: str) -> List[str]:
         """
         使用 newspaper3k 抓取文章所有图片
         
         Args:
-            url: 新闻原文链接
+            url: 新闻原文链接（可以是 RSS 中转源）
         
         Returns:
             List[str]: 图片URL列表
@@ -104,11 +143,9 @@ class ImageFetcher:
             return []
         
         try:
-            # 在异步环境中运行同步代码
             loop = asyncio.get_event_loop()
             article = Article(url, language='en')
             
-            # 下载和解析（使用线程池避免阻塞）
             def parse_article():
                 try:
                     article.download()
@@ -120,37 +157,26 @@ class ImageFetcher:
             
             images = await loop.run_in_executor(None, parse_article)
             
-            # 过滤和返回
             valid_images = []
             for img_url in images:
-                # 过滤掉小图标、广告图等
                 if self._is_valid_image_url(img_url):
                     valid_images.append(img_url)
             
-            return valid_images[:5]  # 最多5张
+            return valid_images[:5]
             
         except Exception as e:
             print(f"    [newspaper3k] 获取图片失败: {e}")
             return []
     
     def _is_valid_image_url(self, url: str) -> bool:
-        """
-        检查图片URL是否有效（过滤掉小图标、广告等）
-        
-        Args:
-            url: 图片URL
-        
-        Returns:
-            bool: 是否有效
-        """
+        """检查图片URL是否有效"""
         if not url:
             return False
         
-        # 过滤掉常见的非内容图片
         invalid_patterns = [
             'icon', 'logo', 'avatar', 'button', 'banner',
             'ad.', 'ads.', 'advertisement', 'tracking',
-            'pixel', 'beacon', 'spacer', 'gif',
+            'pixel', 'beacon', 'spacer',
             'facebook.com/tr', 'google-analytics',
             'doubleclick', 'googlesyndication'
         ]
@@ -160,25 +186,14 @@ class ImageFetcher:
             if pattern in url_lower:
                 return False
         
-        # 只保留常见图片格式
         valid_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
         has_valid_ext = any(url_lower.endswith(ext) for ext in valid_extensions)
-        
-        # 或者URL中包含图片相关路径
         has_img_path = '/image' in url_lower or '/img' in url_lower or 'cdn' in url_lower
         
         return has_valid_ext or has_img_path
     
     async def extract_og_image(self, url: str) -> Optional[str]:
-        """
-        从网页提取 OG 图（最相关）
-        
-        Args:
-            url: 新闻原文链接
-        
-        Returns:
-            str: 图片URL 或 None
-        """
+        """从网页提取 OG 图"""
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
@@ -188,18 +203,14 @@ class ImageFetcher:
                     html = await resp.text()
                     soup = BeautifulSoup(html, "html.parser")
                     
-                    # 尝试多种方式提取图片
-                    # 1. og:image
                     og = soup.find("meta", property="og:image")
                     if og and og.get("content"):
                         return og["content"]
                     
-                    # 2. twitter:image
                     twitter = soup.find("meta", attrs={"name": "twitter:image"})
                     if twitter and twitter.get("content"):
                         return twitter["content"]
                     
-                    # 3. 第一张图片
                     img = soup.find("img")
                     if img and img.get("src"):
                         src = img["src"]
@@ -212,17 +223,8 @@ class ImageFetcher:
         return None
     
     async def get_wikipedia_image(self, entity: str) -> Optional[str]:
-        """
-        从 Wikipedia 获取人物/地点图片
-        
-        Args:
-            entity: 实体名称（如"特朗普"、"匈牙利"）
-        
-        Returns:
-            str: 图片URL 或 None
-        """
+        """从 Wikipedia 获取人物/地点图片"""
         try:
-            # 尝试英文 Wikipedia
             url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{entity}"
             
             async with aiohttp.ClientSession() as session:
@@ -239,20 +241,11 @@ class ImageFetcher:
         return None
     
     async def search_pexels(self, keywords: List[str]) -> List[str]:
-        """
-        使用 Pexels API 搜索图片（关键词搜索，非随机）
-        
-        Args:
-            keywords: 关键词列表（如["匈牙利", "大选"]）
-        
-        Returns:
-            List[str]: 图片URL列表
-        """
+        """使用 Pexels API 搜索图片"""
         if not self.pexels_api_key:
             return []
         
         try:
-            # 用关键词搜索，比随机图相关性高
             query = " ".join(keywords[:2])
             
             headers = {"Authorization": self.pexels_api_key}
@@ -280,84 +273,86 @@ class ImageFetcher:
         return []
     
     def _extract_entities(self, analysis: dict) -> List[str]:
-        """
-        从分析结果中提取实体（人物、地点）
-        
-        Args:
-            analysis: AI 分析结果
-        
-        Returns:
-            List[str]: 实体列表
-        """
+        """从分析结果中提取实体"""
         entities = []
         
-        # 从标签中提取
         tags = analysis.get("tags", [])
         for tag in tags:
-            # 简单判断：大写开头的可能是人名或地名
             if tag and tag[0].isupper():
                 entities.append(tag)
         
-        # 从内容类型判断
-        content_type = analysis.get("content_type", "")
-        if "politics" in content_type.lower():
-            # 政治新闻通常涉及人物
-            pass
-        
-        return entities[:3]  # 最多3个实体
+        return entities[:3]
 
-# 同步版本（用于非异步环境）
+
+# 同步版本
 class ImageFetcherSync:
     """同步版本的图片获取器"""
+    
+    IMAGE_PROXY_URL = "https://images.weserv.nl/?url="
     
     def __init__(self):
         self.pexels_api_key = os.getenv("PEXELS_API_KEY", "")
         self.pixabay_api_key = os.getenv("PIXABAY_API_KEY", "")
+        self.enable_image_proxy = os.getenv("ENABLE_IMAGE_PROXY", "true").lower() == "true"
+    
+    def _proxy_image_url(self, img_url: str) -> str:
+        """将外网图片 URL 转换为代理 URL"""
+        if not self.enable_image_proxy:
+            return img_url
+        
+        if img_url.startswith(self.IMAGE_PROXY_URL):
+            return img_url
+        
+        if any(domain in img_url.lower() for domain in [
+            'pexels.com', 'pixabay.com', 'aliyun', 'alicdn.com',
+            'wechat', 'qq.com', 'baidu.com', 'zhihu.com'
+        ]):
+            return img_url
+        
+        clean_url = img_url.replace('https://', '').replace('http://', '')
+        return f"{self.IMAGE_PROXY_URL}{clean_url}"
     
     def get_article_images(self, news_item: dict, analysis: dict = None) -> List[str]:
-        """
-        获取文章配图（同步版本）
-        
-        回退逻辑：如果newspaper3k失败或图片不足，自动尝试其他来源
-        """
+        """获取文章配图（同步版本）"""
         images = []
         url = news_item.get("url", "")
         
-        # 第一优先级：newspaper3k 抓取所有图片
+        # 第一优先级：newspaper3k
         np_success = False
         if url and NEWSPAPER_AVAILABLE:
             np_images = self.extract_newspaper_images(url)
             if np_images:
-                images.extend(np_images)
+                proxied_images = [self._proxy_image_url(img) for img in np_images]
+                images.extend(proxied_images)
                 np_success = True
-                print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片")
+                print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片（已代理）")
         
         # 第二优先级：OG 图
-        # 如果newspaper3k失败或图片不足(少于2张)，尝试OG图
         if url and (not np_success or len(images) < 2):
             og_image = self.extract_og_image(url)
-            if og_image and og_image not in images:
-                images.append(og_image)
-                print(f"    [图片] 找到 OG 图")
+            if og_image:
+                proxied_og = self._proxy_image_url(og_image)
+                if proxied_og not in images:
+                    images.append(proxied_og)
+                    print(f"    [图片] 找到 OG 图（已代理）")
         
         # 第三优先级：Wikipedia
-        # 如果图片不足，尝试Wikipedia
         if analysis and len(images) < 3:
             entities = self._extract_entities(analysis)
             for entity in entities[:2]:
                 if len(images) >= 3:
                     break
                 wiki_img = self.get_wikipedia_image(entity)
-                if wiki_img and wiki_img not in images:
-                    images.append(wiki_img)
-                    print(f"    [图片] 找到 Wikipedia 图: {entity}")
+                if wiki_img:
+                    proxied_wiki = self._proxy_image_url(wiki_img)
+                    if proxied_wiki not in images:
+                        images.append(proxied_wiki)
+                        print(f"    [图片] 找到 Wikipedia 图: {entity}")
         
         # 兜底：Pexels
-        # 如果图片不足2张，使用Pexels兜底
         if len(images) < 2:
             tags = analysis.get("tags", []) if analysis else []
             if not tags and news_item.get("title"):
-                # 如果没有tags，从标题提取关键词
                 tags = news_item["title"].split()[:3]
             if tags:
                 pexels_imgs = self.search_pexels(tags[:3])
@@ -372,15 +367,7 @@ class ImageFetcherSync:
         return images[:5]
     
     def extract_newspaper_images(self, url: str) -> List[str]:
-        """
-        使用 newspaper3k 抓取文章所有图片（同步版本）
-        
-        Args:
-            url: 新闻原文链接
-        
-        Returns:
-            List[str]: 图片URL列表
-        """
+        """使用 newspaper3k 抓取文章所有图片（同步版本）"""
         if not NEWSPAPER_AVAILABLE:
             return []
         
@@ -389,7 +376,6 @@ class ImageFetcherSync:
             article.download()
             article.parse()
             
-            # 过滤和返回
             valid_images = []
             for img_url in article.images:
                 if self._is_valid_image_url(img_url):
@@ -402,16 +388,14 @@ class ImageFetcherSync:
             return []
     
     def _is_valid_image_url(self, url: str) -> bool:
-        """
-        检查图片URL是否有效（过滤掉小图标、广告等）
-        """
+        """检查图片URL是否有效"""
         if not url:
             return False
         
         invalid_patterns = [
             'icon', 'logo', 'avatar', 'button', 'banner',
             'ad.', 'ads.', 'advertisement', 'tracking',
-            'pixel', 'beacon', 'spacer', 'gif',
+            'pixel', 'beacon', 'spacer',
             'facebook.com/tr', 'google-analytics',
             'doubleclick', 'googlesyndication'
         ]
@@ -436,12 +420,10 @@ class ImageFetcherSync:
             
             soup = BeautifulSoup(response.text, "html.parser")
             
-            # og:image
             og = soup.find("meta", property="og:image")
             if og and og.get("content"):
                 return og["content"]
             
-            # twitter:image
             twitter = soup.find("meta", attrs={"name": "twitter:image"})
             if twitter and twitter.get("content"):
                 return twitter["content"]
