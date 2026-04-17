@@ -13,17 +13,19 @@ class Config:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     
     DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY") or ""
-    
-    RSS_SOURCES = [
-        "https://rss.ovh/bbc/world",  # 社区实例 - BBC
-        "https://rss.ovh/guardian/world",  # Guardian
-        "https://rss.ovh/aljazeera/english/news",  # Al Jazeera
-        "https://rss.ovh/ft/world",  # FT
 
-        # 备选（如果上面不行）
-        "https://rsshub.rssforever.com/bbc/world",
-        "https://rsshub.netlify.app/bbc/world",
-]
+    RSS_SOURCES = [
+        # BBC 世界新闻
+        "https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/world/rss.xml",
+        # BBC 首页
+        "https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/rss.xml",
+        # CNN 世界新闻
+        "https://api.rss2json.com/v1/api.json?rss_url=https://edition.cnn.com/rss/edition_world.rss",
+        # 南华早报
+        "https://api.rss2json.com/v1/api.json?rss_url=https://www.scmp.com/rss/91/feed",
+        # Al Jazeera
+        "https://api.rss2json.com/v1/api.json?rss_url=https://www.aljazeera.com/xml/rss/all.xml",
+    ]
     
     MAX_NEWS_PER_SOURCE = int(os.getenv("MAX_NEWS_PER_SOURCE", "5"))
     MAX_NEWS_TO_ANALYZE = int(os.getenv("MAX_NEWS_TO_ANALYZE", "10"))
