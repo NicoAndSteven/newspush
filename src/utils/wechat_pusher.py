@@ -216,17 +216,37 @@ class WeChatDraftPusher:
         }
 
         try:
-            resp = requests.post(url, json=article, timeout=20)
+            # 使用 ensure_ascii=False 防止中文被转义为 Unicode
+            import json
+            article_json = json.dumps(article, ensure_ascii=False)
+            headers = {"Content-Type": "application/json; charset=utf-8"}
+            resp = requests.post(url, data=article_json.encode('utf-8'), headers=headers, timeout=20)
             result = resp.json()
+            
+            # 调试日志
+            print(f"    [调试] 微信API响应: {result}")
 
-            if result.get("errcode") == 0:
-                print(f"🎉 成功推送到微信公众号草稿箱！")
-                print(f"标题：{title}")
-                print(f"请登录 mp.weixin.qq.com → 素材管理 → 草稿箱 查看并发布")
-                return True
-            else:
+            # 微信API返回的错误码判断
+            # 成功时返回: {"media_id": "xxx"}
+            # 失败时返回: {"errcode": xxx, "errmsg": "..."}
+            errcode = result.get("errcode")
+            
+            # 有错误码且不为0，说明失败
+            if errcode is not None and errcode != 0:
                 print(f"❌ 推送失败: {result.get('errmsg', result)}")
                 return False
+            
+            # 有 media_id 说明成功（无论 item 是否为空）
+            if result.get("media_id"):
+                print(f"🎉 成功推送到微信公众号草稿箱！")
+                print(f"标题：{title}")
+                print(f"media_id: {result.get('media_id')}")
+                print(f"请登录 mp.weixin.qq.com → 素材管理 → 草稿箱 查看并发布")
+                return True
+            
+            # 其他情况
+            print(f"❌ 推送失败: 未知响应格式 - {result}")
+            return False
 
         except Exception as e:
             print(f"❌ 推送异常: {e}")

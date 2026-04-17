@@ -277,6 +277,14 @@ class NewsItem:
     ai_summary: str = ""
     is_video_worthy: bool = False
     full_content: str = ""
+    thumbnail: str = ""  # RSS 提供的缩略图 URL
+    images: List[str] = None  # 图片列表
+    
+    def __post_init__(self):
+        if self.images is None:
+            self.images = []
+        if self.keywords is None:
+            self.keywords = []
     
     def to_dict(self):
         return asdict(self)
@@ -341,13 +349,27 @@ class RSSNewsFetcher:
                         title = clean_html(entry.get('title', ''))
                         description = clean_html(entry.get('description', ''))
                         
+                        # 获取图片（thumbnail 或 enclosure）
+                        thumbnail = entry.get('thumbnail', '')
+                        enclosure = entry.get('enclosure', {})
+                        images = []
+                        
+                        if thumbnail:
+                            images.append(thumbnail)
+                        elif enclosure and enclosure.get('thumbnail'):
+                            images.append(enclosure['thumbnail'])
+                        elif enclosure and enclosure.get('link'):
+                            images.append(enclosure['link'])
+                        
                         news_item = NewsItem(
                             title=title,
                             link=entry.get('link', ''),
                             description=description,
                             published=entry.get('pubDate', datetime.now().isoformat()),
                             source=feed_title,
-                            category=category
+                            category=category,
+                            thumbnail=thumbnail,
+                            images=images
                         )
                         news_items.append(news_item)
                         
@@ -365,13 +387,34 @@ class RSSNewsFetcher:
                     title = clean_html(entry.get('title', ''))
                     description = clean_html(entry.get('summary', entry.get('description', '')))
                     
+                    # 获取图片（media_thumbnail 或 enclosure）
+                    thumbnail = ''
+                    images = []
+                    
+                    # 尝试获取 media:thumbnail
+                    if hasattr(entry, 'media_thumbnail') and entry.media_thumbnail:
+                        thumbnail = entry.media_thumbnail[0].get('url', '')
+                        if thumbnail:
+                            images.append(thumbnail)
+                    
+                    # 尝试获取 enclosure
+                    if hasattr(entry, 'enclosures') and entry.enclosures:
+                        for enc in entry.enclosures:
+                            if enc.get('type', '').startswith('image/'):
+                                images.append(enc.get('href', ''))
+                                if not thumbnail:
+                                    thumbnail = enc.get('href', '')
+                                break
+                    
                     news_item = NewsItem(
                         title=title,
                         link=entry.get('link', ''),
                         description=description,
                         published=entry.get('published', datetime.now().isoformat()),
                         source=feed.feed.get('title', url),
-                        category=category
+                        category=category,
+                        thumbnail=thumbnail,
+                        images=images
                     )
                     news_items.append(news_item)
             

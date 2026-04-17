@@ -66,10 +66,11 @@ class ImageFetcher:
         获取文章配图（分层策略）
         
         优先级：
-        1. newspaper3k 抓取的所有图片（通过代理转换）
-        2. OG 图（原文配图，通过代理转换）
-        3. Wikipedia 图片（人物/地点）
-        4. Pexels 关键词搜索（兜底）
+        1. RSS 提供的图片（通过代理）- 最优先
+        2. newspaper3k 抓取的所有图片（通过代理转换）
+        3. OG 图（原文配图，通过代理转换）
+        4. Wikipedia 图片（人物/地点）
+        5. Pexels 关键词搜索（兜底）
         
         Returns:
             List[str]: 图片URL列表（最多5张）
@@ -77,28 +78,39 @@ class ImageFetcher:
         images = []
         url = news_item.get("url", "")
         
-        # 第一优先级：newspaper3k 抓取所有图片
-        np_success = False
-        if url and NEWSPAPER_AVAILABLE:
+        # 第一优先级：RSS 提供的图片（通过代理转换）
+        rss_images = news_item.get("images", [])
+        if rss_images:
+            for img_url in rss_images:
+                if img_url and self._is_valid_image_url(img_url):
+                    proxied_img = self._proxy_image_url(img_url)
+                    if proxied_img not in images:
+                        images.append(proxied_img)
+            if images:
+                print(f"    [图片] RSS 提供 {len(images)} 张图片（已代理）")
+        
+        # 第二优先级：newspaper3k 抓取所有图片
+        if url and NEWSPAPER_AVAILABLE and len(images) < 2:
             np_images = await self.extract_newspaper_images(url)
             if np_images:
-                # 转换图片 URL 为代理 URL
-                proxied_images = [self._proxy_image_url(img) for img in np_images]
-                images.extend(proxied_images)
-                np_success = True
+                for img_url in np_images:
+                    proxied_img = self._proxy_image_url(img_url)
+                    if proxied_img not in images:
+                        images.append(proxied_img)
+                        if len(images) >= 3:
+                            break
                 print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片（已代理）")
         
-        # 第二优先级：从原文抓 OG 图
-        if url and (not np_success or len(images) < 2):
+        # 第三优先级：从原文抓 OG 图
+        if url and len(images) < 2:
             og_image = await self.extract_og_image(url)
             if og_image:
-                # 转换 OG 图为代理 URL
                 proxied_og = self._proxy_image_url(og_image)
                 if proxied_og not in images:
                     images.append(proxied_og)
                     print(f"    [图片] 找到 OG 图（已代理）")
         
-        # 第三优先级：Wikipedia 人物/地点图
+        # 第四优先级：Wikipedia 人物/地点图
         if analysis and len(images) < 3:
             entities = self._extract_entities(analysis)
             for entity in entities[:2]:
@@ -106,14 +118,13 @@ class ImageFetcher:
                     break
                 wiki_img = await self.get_wikipedia_image(entity)
                 if wiki_img:
-                    # Wikipedia 图片通常可以访问，但也可以代理
                     proxied_wiki = self._proxy_image_url(wiki_img)
                     if proxied_wiki not in images:
                         images.append(proxied_wiki)
                         print(f"    [图片] 找到 Wikipedia 图: {entity}")
         
         # 兜底：Pexels 关键词搜索
-        if len(images) < 2:
+        if len(images) < 1:
             tags = analysis.get("tags", []) if analysis else []
             if not tags and news_item.get("title"):
                 tags = news_item["title"].split()[:3]
@@ -313,22 +324,43 @@ class ImageFetcherSync:
         return f"{self.IMAGE_PROXY_URL}{clean_url}"
     
     def get_article_images(self, news_item: dict, analysis: dict = None) -> List[str]:
-        """获取文章配图（同步版本）"""
+        """获取文章配图（同步版本）
+        
+        优先级：
+        1. RSS 提供的图片（通过代理）- 最优先，因为服务器可以访问
+        2. newspaper3k 抓取的图片（通过代理）
+        3. OG 图（通过代理）
+        4. Wikipedia 图片
+        5. Pexels（兜底）
+        """
         images = []
         url = news_item.get("url", "")
         
-        # 第一优先级：newspaper3k
-        np_success = False
-        if url and NEWSPAPER_AVAILABLE:
+        # 第一优先级：RSS 提供的图片（通过代理转换）
+        rss_images = news_item.get("images", [])
+        if rss_images:
+            for img_url in rss_images:
+                if img_url and self._is_valid_image_url(img_url):
+                    proxied_img = self._proxy_image_url(img_url)
+                    if proxied_img not in images:
+                        images.append(proxied_img)
+            if images:
+                print(f"    [图片] RSS 提供 {len(images)} 张图片（已代理）")
+        
+        # 第二优先级：newspaper3k（如果 RSS 图片不足）
+        if url and NEWSPAPER_AVAILABLE and len(images) < 2:
             np_images = self.extract_newspaper_images(url)
             if np_images:
-                proxied_images = [self._proxy_image_url(img) for img in np_images]
-                images.extend(proxied_images)
-                np_success = True
+                for img_url in np_images:
+                    proxied_img = self._proxy_image_url(img_url)
+                    if proxied_img not in images:
+                        images.append(proxied_img)
+                        if len(images) >= 3:
+                            break
                 print(f"    [图片] newspaper3k 找到 {len(np_images)} 张图片（已代理）")
         
-        # 第二优先级：OG 图
-        if url and (not np_success or len(images) < 2):
+        # 第三优先级：OG 图（如果图片不足）
+        if url and len(images) < 2:
             og_image = self.extract_og_image(url)
             if og_image:
                 proxied_og = self._proxy_image_url(og_image)
@@ -336,7 +368,7 @@ class ImageFetcherSync:
                     images.append(proxied_og)
                     print(f"    [图片] 找到 OG 图（已代理）")
         
-        # 第三优先级：Wikipedia
+        # 第四优先级：Wikipedia
         if analysis and len(images) < 3:
             entities = self._extract_entities(analysis)
             for entity in entities[:2]:
@@ -350,7 +382,7 @@ class ImageFetcherSync:
                         print(f"    [图片] 找到 Wikipedia 图: {entity}")
         
         # 兜底：Pexels
-        if len(images) < 2:
+        if len(images) < 1:
             tags = analysis.get("tags", []) if analysis else []
             if not tags and news_item.get("title"):
                 tags = news_item["title"].split()[:3]
