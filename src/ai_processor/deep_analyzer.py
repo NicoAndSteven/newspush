@@ -57,6 +57,9 @@ class DeepAnalysisResult:
     # 核心事实清单
     core_facts: Dict = None  # {"when": "", "where": "", "who": [], "what": "", "key_disputes": []}
     
+    # 点评文章（合并调用时使用）
+    commentary: str = ""
+    
     def to_dict(self):
         return asdict(self)
 
@@ -191,6 +194,8 @@ class DeepNewsAnalyzer:
     "controversial_aspects": ["争议点（具体说明各方立场和分歧原因，包括潜在升级风险）"],
     "expert_opinion": "专家视角点评（结合具体事实进行深度分析，避免空洞的'弱国无外交'式套话）",
     
+    "commentary": "轻松幽默的点评文章（1000-1500字，像聪明朋友在吐槽国际新闻，口语化表达，不要用括号、官腔和模板词汇，直接输出正文）",
+    
     "platform_contents": {{
         "wechat": "适合微信公众号的长文点评（800-1500字，包含具体事实和深度分析）",
         "xiaohongshu": "适合小红书的短文案（300-500字，带emoji，口语化）",
@@ -302,7 +307,8 @@ class DeepNewsAnalyzer:
                 is_video_worthy=result_json.get("is_video_worthy", False),
                 video_hooks=result_json.get("video_hooks", []),
                 credibility=credibility,
-                core_facts=core_facts
+                core_facts=core_facts,
+                commentary=result_json.get("commentary", "")  # 合并调用时直接返回点评
             )
             
         except Exception as e:

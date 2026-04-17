@@ -270,8 +270,12 @@ class NewsPushPipeline:
             if credibility_level == "medium":
                 print(f"    [警告] 可信度中等: {', '.join(issues[:2])}")
             
-            # 生成点评正文
-            commentary = self.commentary_generator.generate_commentary(analysis, style)
+            # 使用合并调用时直接返回的点评（如果有的话）
+            commentary = analysis.commentary if hasattr(analysis, 'commentary') and analysis.commentary else ""
+            
+            # 如果没有点评，则单独生成（兼容旧逻辑）
+            if not commentary:
+                commentary = self.commentary_generator.generate_commentary(analysis, style)
             
             if commentary:
                 # 获取配图
@@ -373,7 +377,8 @@ class NewsPushPipeline:
                     "commentary": commentary,
                     "versions": versions,
                     "sensitivity": sensitivity_info,
-                    "images": images  # 保存图片URL供微信推送使用
+                    "images": images,
+                    "translated_title": translated_title  # 保存翻译后的标题
                 })
                 
                 generated_count += 1
@@ -439,9 +444,11 @@ class NewsPushPipeline:
             for item in commentaries:
                 news = item.get('news')
                 versions = item.get('versions', {})
-                images = item.get('images', [])  # 使用之前保存的图片URL
+                images = item.get('images', [])
+                translated_title = item.get('translated_title', '')  # 使用翻译后的标题
                 
-                title = getattr(news, 'title', '未命名文章') if news else '未命名文章'
+                # 使用翻译后的标题，如果没有则使用原标题
+                title = translated_title if translated_title else getattr(news, 'title', '未命名文章')
                 news_url = getattr(news, 'link', '') if news else ''
                 content = versions.get('public', '')
                 cover_image = None
