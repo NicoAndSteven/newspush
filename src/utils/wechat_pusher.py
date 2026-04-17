@@ -64,7 +64,12 @@ class WeChatDraftPusher:
         
         try:
             print(f"    [下载图片] {image_url[:60]}...")
-            response = requests.get(image_url, timeout=15, stream=True)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
+            response = requests.get(image_url, timeout=15, stream=True, headers=headers)
             
             if response.status_code != 200:
                 print(f"    [下载失败] HTTP {response.status_code}")
