@@ -26,13 +26,11 @@ class Config:
     # RSS 源配置（带分类）
     # 格式: (RSS_URL, 分类名称)
     # 分类: tech, finance, sports, entertainment, world
-    # rss2json.com 添加 &count=20 参数获取更多新闻
     RSS_SOURCES = [
         # ============== 国际新闻 ==============
-        ("https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/world/rss.xml&count=20", "world"),
-        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.theguardian.com/world/rss&count=20", "world"),
-        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.ft.com/world?format=rss&count=20", "finance"),
-        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.aljazeera.com/xml/rss/all.xml&count=20", "world"),
+        # 直接使用原始 RSS 源，不通过 rss2json（避免 API 限制）
+        ("https://feeds.bbci.co.uk/news/world/rss.xml", "world"),
+        ("https://www.theguardian.com/world/rss", "world"),
         ("https://feeds.npr.org/1001/rss.xml", "world"),
         
         # ============== 科技新闻 ==============

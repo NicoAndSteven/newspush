@@ -52,7 +52,7 @@ class WeChatDraftPusher:
             return None
 
     def _download_image(self, image_url: str) -> Optional[str]:
-        """下载网络图片到临时文件"""
+        """下载网络图片到临时文件（自动转换 webp 为 jpg）"""
         if not image_url:
             return None
             
@@ -83,19 +83,33 @@ class WeChatDraftPusher:
                     print(f"    [下载失败] 非图片类型")
                     return None
             
-            suffix = '.jpg'
-            if '.png' in image_url.lower():
-                suffix = '.png'
-            elif '.gif' in image_url.lower():
-                suffix = '.gif'
-            elif '.webp' in image_url.lower():
-                suffix = '.webp'
+            # 微信只支持 jpg/png/gif，webp 需要转换
+            is_webp = 'webp' in content_type.lower() or '.webp' in image_url.lower()
             
+            # 统一保存为 jpg（微信最兼容）
+            suffix = '.jpg'
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         tmp_file.write(chunk)
                 tmp_path = tmp_file.name
+            
+            # 如果是 webp，尝试转换为 jpg
+            if is_webp:
+                try:
+                    from PIL import Image
+                    img = Image.open(tmp_path)
+                    if img.mode in ('RGBA', 'P'):
+                        img = img.convert('RGB')
+                    jpg_path = tmp_path.replace('.jpg', '_converted.jpg')
+                    img.save(jpg_path, 'JPEG', quality=95)
+                    os.unlink(tmp_path)
+                    tmp_path = jpg_path
+                    print(f"    [转换成功] webp -> jpg")
+                except ImportError:
+                    print(f"    [警告] PIL 未安装，无法转换 webp，可能上传失败")
+                except Exception as e:
+                    print(f"    [警告] webp 转换失败: {e}")
             
             print(f"    [保存成功] {tmp_path}")
             return tmp_path
