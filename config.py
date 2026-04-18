@@ -27,48 +27,30 @@ class Config:
     # 格式: (RSS_URL, 分类名称)
     # 分类: tech, finance, sports, entertainment, world
     RSS_SOURCES = [
-        # ============== 原有源（国际新闻） ==============
+        # ============== 国际新闻 ==============
         ("https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/world/rss.xml", "world"),
         ("https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/rss.xml", "world"),
         ("https://api.rss2json.com/v1/api.json?rss_url=https://www.theguardian.com/world/rss", "world"),
         ("https://api.rss2json.com/v1/api.json?rss_url=https://www.ft.com/world?format=rss", "finance"),
         ("https://api.rss2json.com/v1/api.json?rss_url=https://www.aljazeera.com/xml/rss/all.xml", "world"),
+        ("https://feeds.npr.org/1001/rss.xml", "world"),
         
-        # ============== 国内科技 ==============
+        # ============== 科技新闻 ==============
         ("https://36kr.com/feed", "tech"),
-        ("https://www.pingwest.com/feed/all", "tech"),
         ("https://techcrunch.com/feed/", "tech"),
+        ("https://www.theverge.com/rss/index.xml", "tech"),
+        ("https://feeds.arstechnica.com/arstechnica/index", "tech"),
         
-        # ============== 国内财经 ==============
+        # ============== 财经新闻 ==============
         ("https://a.jiemian.com/index.php?m=article&a=rss", "finance"),
         
-        # ============== 国内体育 ==============
-        ("https://www.dongqiudi.com/rss/feed", "sports"),
+        # ============== 体育新闻 ==============
+        ("https://www.espn.com/espn/rss/news", "sports"),
+        ("https://www.cbssports.com/rss/headlines/", "sports"),
         
-        # ============== 国内娱乐 ==============
-        ("https://www.mgtv.com/rss/news/index.xml", "entertainment"),
-        
-        # ============== 国外体育（中转） ==============
-        ("https://rsstranslator.com/rss?url=https://feeds.bbci.co.uk/sport/rss.xml", "sports"),
-        ("https://rsstranslator.com/rss?url=https://feeds.bbci.co.uk/sport/nba/rss.xml", "sports"),
-        ("https://rsstranslator.com/rss?url=https://feeds.bbci.co.uk/sport/football/rss.xml", "sports"),
-        
-        # ============== 国外财经（中转） ==============
-        ("https://rsstranslator.com/rss?url=https://www.reuters.com/business/rss/", "finance"),
-        ("https://rssbrain.com/feed?url=https://www.bloomberg.com/markets/rss", "finance"),
-        
-        # ============== 好莱坞/国际娱乐（中转） ==============
-        ("https://rsstranslator.com/rss?url=https://variety.com/feed/", "entertainment"),
-        ("https://rssbrain.com/feed?url=https://www.hollywoodreporter.com/feed/", "entertainment"),
-        
-        # ============== 韩国娱乐（中转） ==============
-        ("https://rsstranslator.com/rss?url=https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=14&plink=RSSREADER", "entertainment"),
-        ("https://rsstranslator.com/rss?url=http://imnews.imbc.com/rss/news/news_06.xml", "entertainment"),
-        ("https://rsstranslator.com/rss?url=https://www.yonhapnewstv.co.kr/category/news/culture/feed/", "entertainment"),
-        ("https://rsstranslator.com/rss?url=https://www.soompi.com/feed", "entertainment"),
-        ("https://rsstranslator.com/rss?url=https://www.kpopdigest.com/feed", "entertainment"),
-        ("https://rsstranslator.com/rss?url=https://www.hancinema.net/rss.xml", "entertainment"),
-        ("https://rssbrain.com/feed?url=https://www.bntnews.co.kr/rss/feed", "entertainment"),
+        # ============== 娱乐新闻 ==============
+        ("https://www.tmz.com/rss.xml", "entertainment"),
+        ("https://www.billboard.com/feed/", "entertainment"),
     ]
     
     # 每个板块每次最多抓取的新闻数量
