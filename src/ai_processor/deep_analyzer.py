@@ -117,9 +117,12 @@ class DeepNewsAnalyzer:
             # 阿里云百炼 API
             try:
                 from openai import OpenAI
+                import httpx
+                # 增加超时时间，避免 SSL 连接中断
                 self.client = OpenAI(
                     api_key=self.api_key,
-                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    timeout=httpx.Timeout(120.0, connect=60.0)
                 )
                 self.model = self.model or "qwen3.6-plus"
                 print(f"  [DEBUG] 阿里云百炼客户端初始化成功，模型: {self.model}")
@@ -230,8 +233,8 @@ class DeepNewsAnalyzer:
 """
         
         try:
-            max_retries = 3
-            retry_delay = 5
+            max_retries = 5  # 增加重试次数
+            retry_delay = 10  # 增加初始延迟
             
             for attempt in range(max_retries):
                 try:
@@ -455,8 +458,8 @@ class CommentaryGenerator:
 现在请开始写，直接输出文章正文，不要有任何前言或解释："""
         
         try:
-            max_retries = 3
-            retry_delay = 5
+            max_retries = 5  # 增加重试次数
+            retry_delay = 10  # 增加初始延迟
             
             for attempt in range(max_retries):
                 try:
