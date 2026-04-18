@@ -3,8 +3,26 @@
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="$PROJECT_DIR/logs/newspush_$(date +\%Y\%m\%d_\%H\%M\%S).log"
+LOCK_FILE="$PROJECT_DIR/.newspush.lock"
 
-echo "[$(date)] 开始执行 NewsPush" >> "$LOG_FILE"
+# 检查是否已有进程在运行
+if [ -f "$LOCK_FILE" ]; then
+    PID=$(cat "$LOCK_FILE")
+    if ps -p "$PID" > /dev/null 2>&1; then
+        echo "[$(date)] 已有 NewsPush 进程在运行 (PID: $PID)，跳过本次执行" >> "$LOG_FILE"
+        exit 0
+    else
+        echo "[$(date)] 发现残留锁文件，清理中..." >> "$LOG_FILE"
+        rm -f "$LOCK_FILE"
+    fi
+fi
+
+# 创建锁文件
+echo $$ > "$LOCK_FILE"
+echo "[$(date)] 开始执行 NewsPush (PID: $$)" >> "$LOG_FILE"
+
+# 确保退出时清理锁文件
+trap 'rm -f "$LOCK_FILE"; echo "[$(date)] 锁文件已清理" >> "$LOG_FILE"' EXIT
 
 cd "$PROJECT_DIR" || exit 1
 

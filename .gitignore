@@ -46,6 +46,9 @@ downloads/
 *.log
 logs/
 
+# Lock files
+.newspush.lock
+
 # OS
 .DS_Store
 Thumbs.db
