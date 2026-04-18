@@ -143,6 +143,21 @@ if [[ $confirm =~ ^[Yy]$ ]]; then
     echo "日志文件位置: $PROJECT_DIR/logs/"
     echo ""
     echo "手动测试执行: $CRON_SCRIPT"
+    
+    # 询问是否立即执行一次
+    echo ""
+    read -p "是否立即执行一次测试? [y/N]: " run_now
+    
+    if [[ $run_now =~ ^[Yy]$ ]]; then
+        echo ""
+        echo "======================================"
+        echo "立即执行一次..."
+        echo "======================================"
+        bash "$CRON_SCRIPT"
+        echo ""
+        echo "执行完成! 查看最新日志:"
+        echo "tail -50 $PROJECT_DIR/logs/newspush_*.log | tail -50"
+    fi
 else
     echo "已取消"
     exit 0
