@@ -34,17 +34,29 @@ echo "[$(date)] 开始执行 NewsPush" >> "$LOG_FILE"
 
 cd "$PROJECT_DIR" || exit 1
 
-# 激活虚拟环境（如果存在）
+# 激活虚拟环境（检查多种可能的名称）
 if [ -f "$PROJECT_DIR/venv38/bin/activate" ]; then
     source "$PROJECT_DIR/venv38/bin/activate"
+    echo "[$(date)] 已激活虚拟环境: venv38" >> "$LOG_FILE"
 elif [ -f "$PROJECT_DIR/venv/bin/activate" ]; then
     source "$PROJECT_DIR/venv/bin/activate"
+    echo "[$(date)] 已激活虚拟环境: venv" >> "$LOG_FILE"
 elif [ -f "$PROJECT_DIR/.venv/bin/activate" ]; then
     source "$PROJECT_DIR/.venv/bin/activate"
+    echo "[$(date)] 已激活虚拟环境: .venv" >> "$LOG_FILE"
+else
+    echo "[$(date)] 警告: 未找到虚拟环境，使用系统 Python" >> "$LOG_FILE"
 fi
 
+# 检查 Python 环境
+echo "[$(date)] Python 路径: $(which python3)" >> "$LOG_FILE"
+echo "[$(date)] Python 版本: $(python3 --version)" >> "$LOG_FILE"
+
 # 执行主程序
+echo "[$(date)] 开始执行 main.py..." >> "$LOG_FILE"
 python3 main.py --once >> "$LOG_FILE" 2>&1
+EXIT_CODE=$?
+echo "[$(date)] main.py 执行完成，退出码: $EXIT_CODE" >> "$LOG_FILE"
 
 # 保留最近 30 天的日志
 find "$PROJECT_DIR/logs" -name "newspush_*.log" -mtime +30 -delete
