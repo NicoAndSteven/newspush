@@ -151,7 +151,7 @@ if [[ $confirm =~ ^[Yy]$ ]]; then
     if [[ $run_now =~ ^[Yy]$ ]]; then
         echo ""
         echo "======================================"
-        echo "立即执行一次..."
+        echo "请立即执行一次..."
         echo "======================================"
         bash "$CRON_SCRIPT"
         echo ""
