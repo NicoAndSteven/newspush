@@ -118,7 +118,7 @@ class TwoStageAnalyzer:
             extra_body = {"enable_search": True} if self.analyzer.enable_search else {}
             
             response = self.analyzer.client.chat.completions.create(
-                model="qwen3.6-plus",
+                model="qwen3.6-flash",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,  # 低温度，更确定性的输出
                 extra_body=extra_body
@@ -209,7 +209,7 @@ class TwoStageAnalyzer:
             extra_body = {"enable_search": True} if self.analyzer.enable_search else {}
             
             response = self.analyzer.client.chat.completions.create(
-                model="qwen3.6-plus",
+                model="qwen3.6-flash",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 extra_body=extra_body

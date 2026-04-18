@@ -132,7 +132,7 @@ def _translate_with_dashscope(text: str, target_lang: str = "zh-CN") -> Optional
         prompt = f"请将以下英文新闻标题翻译成中文，只返回翻译结果，不要解释：\n\n{text}"
         
         response = client.chat.completions.create(
-            model="qwen3.6-plus",
+            model="qwen3.6-flash",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
         )
