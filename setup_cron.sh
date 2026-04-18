@@ -35,7 +35,9 @@ echo "[$(date)] 开始执行 NewsPush" >> "$LOG_FILE"
 cd "$PROJECT_DIR" || exit 1
 
 # 激活虚拟环境（如果存在）
-if [ -f "$PROJECT_DIR/venv/bin/activate" ]; then
+if [ -f "$PROJECT_DIR/venv38/bin/activate" ]; then
+    source "$PROJECT_DIR/venv38/bin/activate"
+elif [ -f "$PROJECT_DIR/venv/bin/activate" ]; then
     source "$PROJECT_DIR/venv/bin/activate"
 elif [ -f "$PROJECT_DIR/.venv/bin/activate" ]; then
     source "$PROJECT_DIR/.venv/bin/activate"
