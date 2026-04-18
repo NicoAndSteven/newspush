@@ -13,7 +13,8 @@ def cleanup_old_files(
     directory: str,
     max_age_hours: int = 24,
     keep_latest: int = 0,
-    dry_run: bool = False
+    dry_run: bool = False,
+    exclude_files: List[str] = None
 ) -> dict:
     """
     清理旧文件
@@ -23,6 +24,7 @@ def cleanup_old_files(
         max_age_hours: 文件最大保留时间（小时）
         keep_latest: 保留最新的N个文件（0=不保留）
         dry_run: 仅模拟，不实际删除
+        exclude_files: 要保留的文件名列表
     
     Returns:
         {
@@ -44,6 +46,7 @@ def cleanup_old_files(
         print(f"[Cleanup] 目录不存在: {directory}")
         return result
     
+    exclude_files = exclude_files or []
     cutoff_time = datetime.now() - timedelta(hours=max_age_hours)
     
     all_files = sorted(
@@ -56,6 +59,10 @@ def cleanup_old_files(
     
     for file_path in all_files:
         if not file_path.is_file():
+            continue
+        
+        if file_path.name in exclude_files:
+            result['kept_count'] += 1
             continue
         
         if file_path in files_to_keep:
@@ -90,7 +97,8 @@ def cleanup_all_results(
     data_dir: str = "./data",
     max_age_hours: int = 24,
     keep_latest: int = 0,
-    dry_run: bool = False
+    dry_run: bool = False,
+    exclude_files: List[str] = None
 ) -> dict:
     """
     清理所有生成的文件
@@ -101,6 +109,7 @@ def cleanup_all_results(
         max_age_hours: 最大保留时间
         keep_latest: 保留最新的N个文件
         dry_run: 仅模拟
+        exclude_files: 要保留的文件名列表
     """
     total_result = {
         'deleted_count': 0,
@@ -108,6 +117,8 @@ def cleanup_all_results(
         'kept_count': 0,
         'errors': []
     }
+    
+    exclude_files = exclude_files or []
     
     print(f"[Cleanup] 开始清理，最大保留时间: {max_age_hours}小时")
     
@@ -133,12 +144,13 @@ def cleanup_all_results(
     return total_result
 
 
-def clear_directory(directory: str, dry_run: bool = False) -> int:
+def clear_directory(directory: str, exclude_files: List[str] = None, dry_run: bool = False) -> int:
     """
-    清空整个目录
+    清空整个目录（可排除特定文件）
     
     Args:
         directory: 要清空的目录
+        exclude_files: 要保留的文件名列表（如 ['analyzed_urls.json']）
         dry_run: 仅模拟
     
     Returns:
@@ -148,13 +160,21 @@ def clear_directory(directory: str, dry_run: bool = False) -> int:
     if not dir_path.exists():
         return 0
     
+    exclude_files = exclude_files or []
     count = 0
+    
     for item in dir_path.iterdir():
         if item.is_file():
+            if item.name in exclude_files:
+                if not dry_run:
+                    print(f"[Cleanup] 保留: {item.name}")
+                continue
+            
             if dry_run:
                 print(f"[Cleanup] [模拟] 将删除: {item.name}")
             else:
                 item.unlink()
+                print(f"[Cleanup] 已删除: {item.name}")
             count += 1
         elif item.is_dir():
             if dry_run:
@@ -164,7 +184,7 @@ def clear_directory(directory: str, dry_run: bool = False) -> int:
             count += 1
     
     if not dry_run:
-        print(f"[Cleanup] 已清空目录: {directory}")
+        print(f"[Cleanup] 已清空目录: {directory}（保留 {len(exclude_files)} 个文件）")
     
     return count
 

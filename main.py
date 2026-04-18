@@ -528,10 +528,11 @@ class NewsPushPipeline:
                 results_dir=str(self.results_dir),
                 data_dir="./data",
                 max_age_hours=0,
-                keep_latest=0
+                keep_latest=0,
+                exclude_files=['analyzed_urls.json']
             )
             from utils.cleanup import clear_directory
-            clear_directory("./data")
+            clear_directory("./data", exclude_files=['analyzed_urls.json'])
     
     def run_scheduled(self, interval_hours: int = 1):
         """定时运行"""
