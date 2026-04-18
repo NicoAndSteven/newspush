@@ -355,13 +355,15 @@ class NewsPushPipeline:
                 
                 # 生成双版本
                 print(f"    生成双版本...")
+                news_category = getattr(item['news'], 'category', 'general')
                 versions = generate_both_versions(
                     news_title=translated_title,  # 使用翻译后的标题
                     news_source=item['news'].source,
                     stage1_facts=stage1_facts,
                     stage2_analysis=stage2_analysis,
                     sensitivity_info=sensitivity_info,
-                    images=images
+                    images=images,
+                    category=news_category  # 传入新闻分类
                 )
                 
                 # 保存文件（如果配置了微信推送，则跳过文件生成）
@@ -481,28 +483,33 @@ class NewsPushPipeline:
         
         if send_email and commentaries:
             print("\n📱 推送到微信公众号草稿箱...")
+            print(f"  已推送文章总数: {self.storage.get_pushed_count()} 篇")
             pushed_count = 0
+            skipped_count = 0
+            
             for item in commentaries:
                 news = item.get('news')
                 versions = item.get('versions', {})
                 images = item.get('images', [])
-                translated_title = item.get('translated_title', '')  # 使用翻译后的标题
+                translated_title = item.get('translated_title', '')
                 
-                # 使用翻译后的标题，如果没有则使用原标题
                 title = translated_title if translated_title else getattr(news, 'title', '未命名文章')
                 news_url = getattr(news, 'link', '') if news else ''
                 content = versions.get('public', '')
                 cover_image = None
                 
-                # 显示新闻源信息
+                # 推送前检查：是否已推送过
+                if self.storage.is_news_pushed(news_url):
+                    print(f"\n  [跳过] 已推送过: {title[:40]}...")
+                    skipped_count += 1
+                    continue
+                
                 print(f"\n  新闻源: {news_url}")
                 print(f"  标题: {title[:40]}...")
                 
-                # 封面图使用第一张（新闻源图片）
-                # 正文图片使用剩余的（Pexels 补充）
                 if images:
-                    cover_image = images[0]  # 封面图
-                    content_images = images[1:] if len(images) > 1 else []  # 正文图片
+                    cover_image = images[0]
+                    content_images = images[1:] if len(images) > 1 else []
                     print(f"  封面图: {cover_image[:60]}...")
                     if content_images:
                         print(f"  正文图片: {len(content_images)} 张")
@@ -510,17 +517,21 @@ class NewsPushPipeline:
                     cover_image = None
                     content_images = []
                 
-                # 推送到微信（封面图 + 正文图片）
+                # 推送到微信
                 if push_article_to_wechat(title, content, cover_image, content_images):
                     pushed_count += 1
                     print(f"  [OK] 推送成功")
+                    # 推送成功后立即标记
+                    self.storage.mark_news_as_pushed(news_url, title)
                 else:
                     print(f"  [跳过] 推送失败")
+            
+            print(f"\n  推送统计: 成功 {pushed_count} 篇, 跳过已推送 {skipped_count} 篇")
             
             if pushed_count > 0:
                 print(f"  [完成] 成功推送 {pushed_count} 篇文章到草稿箱")
             else:
-                print("  [跳过] 未推送任何文章（可能未配置微信公众号）")
+                print("  [跳过] 未推送任何文章（可能未配置微信公众号或全部已推送）")
         
         if cleanup and config.CLEANUP_AFTER_SEND:
             print("\n🧹 清理存储...")
@@ -529,10 +540,10 @@ class NewsPushPipeline:
                 data_dir="./data",
                 max_age_hours=0,
                 keep_latest=0,
-                exclude_files=['analyzed_urls.json']
+                exclude_files=['analyzed_urls.json', 'pushed_urls.json']
             )
             from utils.cleanup import clear_directory
-            clear_directory("./data", exclude_files=['analyzed_urls.json'])
+            clear_directory("./data", exclude_files=['analyzed_urls.json', 'pushed_urls.json'])
     
     def run_scheduled(self, interval_hours: int = 1):
         """定时运行"""

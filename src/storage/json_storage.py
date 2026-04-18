@@ -12,21 +12,34 @@ from pathlib import Path
 class JSONStorage:
     """JSON 文件存储管理器"""
     
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls, data_dir: str = "./data"):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
     def __init__(self, data_dir: str = "./data"):
+        if JSONStorage._initialized:
+            return
+        JSONStorage._initialized = True
+        
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
         self.news_file = self.data_dir / "news.json"
         self.tasks_file = self.data_dir / "tasks.json"
         self.analyzed_urls_file = self.data_dir / "analyzed_urls.json"
+        self.pushed_urls_file = self.data_dir / "pushed_urls.json"
         
-        # 初始化文件
         self._init_file(self.news_file, {"news": []})
         self._init_file(self.tasks_file, {"tasks": []})
         self._init_file(self.analyzed_urls_file, {"urls": {}})
+        self._init_file(self.pushed_urls_file, {"urls": {}})
         
-        # 缓存已分析的 URL（避免频繁读取文件）
         self._analyzed_urls_cache = None
+        self._pushed_urls_cache = None
         self._cache_loaded = False
     
     def _init_file(self, file_path: Path, default_data: dict):
@@ -303,6 +316,43 @@ class JSONStorage:
     def get_analyzed_count(self) -> int:
         """获取已分析文章的数量"""
         urls = self._load_analyzed_urls()
+        return len(urls)
+    
+    # ========== 已推送文章去重 ==========
+    
+    def _load_pushed_urls(self) -> Dict:
+        """加载已推送 URL 缓存"""
+        if self._pushed_urls_cache is None:
+            data = self._load_json(self.pushed_urls_file)
+            self._pushed_urls_cache = data.get('urls', {})
+        return self._pushed_urls_cache
+    
+    def _save_pushed_urls(self):
+        """保存已推送 URL"""
+        self._save_json(self.pushed_urls_file, {"urls": self._pushed_urls_cache or {}})
+    
+    def is_news_pushed(self, link: str) -> bool:
+        """检查新闻是否已推送过"""
+        if not link:
+            return False
+        urls = self._load_pushed_urls()
+        return link in urls
+    
+    def mark_news_as_pushed(self, link: str, title: str = ""):
+        """标记新闻为已推送"""
+        if not link:
+            return
+        urls = self._load_pushed_urls()
+        urls[link] = {
+            'pushed_at': datetime.now().isoformat(),
+            'title': title
+        }
+        self._save_pushed_urls()
+        print(f"    [记录] 已标记为已推送: {link[:50]}...")
+    
+    def get_pushed_count(self) -> int:
+        """获取已推送文章的数量"""
+        urls = self._load_pushed_urls()
         return len(urls)
 
 

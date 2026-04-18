@@ -1,13 +1,13 @@
 """
-双版本输出格式化器
-生成内部完整版（带事实来源标注）和对外发布版（干净专业）
+多模板输出格式化器
+根据新闻类型自动选择合适的模板
 """
 from typing import Dict, List, Optional
 from datetime import datetime
 
 
 class OutputFormatter:
-    """输出格式化器"""
+    """输出格式化器 - 支持多模板"""
     
     @staticmethod
     def generate_internal_version(
@@ -18,15 +18,6 @@ class OutputFormatter:
         sensitivity_info: Dict,
         images: List[str] = None
     ) -> str:
-        """
-        生成内部完整版（带事实来源标注）
-        
-        包含：
-        - 完整的事实核查信息
-        - 敏感度标注
-        - 信息来源标注
-        - 矛盾点标注
-        """
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         images = images or []
         
@@ -57,7 +48,6 @@ class OutputFormatter:
   - 角色: {figure.get('role_in_event', '')}
 """
         
-        # 时间线
         timeline = stage1_facts.get("timeline", [])
         if timeline:
             md += "\n### 时间线\n"
@@ -66,7 +56,6 @@ class OutputFormatter:
                 if item.get('source'):
                     md += f" (来源: {item['source']})"
         
-        # 主张验证
         claims = stage1_facts.get("claims_verification", [])
         if claims:
             md += "\n\n### 主张验证\n"
@@ -76,21 +65,18 @@ class OutputFormatter:
                 md += f"\n  - 置信度: {claim.get('confidence', 'unknown')}"
                 md += f"\n  - 依据: {claim.get('evidence', '')}"
         
-        # 信息来源
         sources = stage1_facts.get("sources", [])
         if sources:
             md += "\n\n### 信息来源\n"
             for src in sources:
                 md += f"\n- [{src.get('credibility', 'unknown').upper()}] {src.get('type', '')}: {src.get('name', '')}"
         
-        # 矛盾点
         conflicts = stage1_facts.get("conflicting_info", [])
         if conflicts:
             md += "\n\n### ⚠️ 矛盾/存疑信息\n"
             for conflict in conflicts:
                 md += f"\n- {conflict}"
         
-        # 阶段2分析
         md += f"""
 
 ---
@@ -148,58 +134,278 @@ class OutputFormatter:
         news_title: str,
         news_source: str,
         stage2_analysis: Dict,
-        images: List[str] = None
+        images: List[str] = None,
+        category: str = "general"
     ) -> str:
         """
-        生成对外发布版（轻松幽默风格）
-        
-        特点：
-        - 去掉所有系统痕迹
-        - 轻松幽默的专栏风格
-        - 结构自然流畅，无生硬小标题
-        - 适合直接发布
-        
-        图片说明：
-        - images[0] 同时作为封面图和正文开头图片
-        - images[1:] 作为正文配图穿插
+        根据新闻类型选择合适的模板
         """
+        content_type = stage2_analysis.get('content_type', 'news')
+        
+        template_map = {
+            'entertainment': OutputFormatter._generate_entertainment_version,
+            'lifestyle': OutputFormatter._generate_entertainment_version,
+            'sports': OutputFormatter._generate_sports_version,
+            'tech': OutputFormatter._generate_tech_version,
+            'finance': OutputFormatter._generate_finance_version,
+            'breaking': OutputFormatter._generate_breaking_version,
+        }
+        
+        category_template_map = {
+            'entertainment': OutputFormatter._generate_entertainment_version,
+            'sports': OutputFormatter._generate_sports_version,
+            'tech': OutputFormatter._generate_tech_version,
+            'finance': OutputFormatter._generate_finance_version,
+        }
+        
+        if category in category_template_map:
+            return category_template_map[category](news_title, news_source, stage2_analysis, images)
+        
+        if content_type in template_map:
+            return template_map[content_type](news_title, news_source, stage2_analysis, images)
+        
+        return OutputFormatter._generate_standard_version(news_title, news_source, stage2_analysis, images)
+    
+    @staticmethod
+    def _generate_entertainment_version(
+        news_title: str,
+        news_source: str,
+        stage2_analysis: Dict,
+        images: List[str] = None
+    ) -> str:
+        """娱乐新闻模板 - 轻松活泼，简洁报道"""
+        images = images or []
+        md = f"# {news_title}\n\n"
+        
+        if images:
+            md += f"![配图]({images[0]})\n\n"
+        
+        if stage2_analysis.get('summary'):
+            md += f"{stage2_analysis['summary']}\n\n"
+        
+        if stage2_analysis.get('expert_opinion'):
+            md += f"{stage2_analysis['expert_opinion']}\n\n"
+        
+        if len(images) > 1:
+            md += f"![配图]({images[1]})\n\n"
+        
+        if stage2_analysis.get('background'):
+            md += f"**背景**：{stage2_analysis['background']}\n\n"
+        
+        if stage2_analysis.get('tags'):
+            md += "---\n\n"
+            md += ' '.join([f"#{t.replace(' ', '_')}" for t in stage2_analysis['tags'][:5]])
+            md += "\n"
+        
+        return md
+    
+    @staticmethod
+    def _generate_sports_version(
+        news_title: str,
+        news_source: str,
+        stage2_analysis: Dict,
+        images: List[str] = None
+    ) -> str:
+        """体育新闻模板 - 赛事报道风格"""
+        images = images or []
+        md = f"# {news_title}\n\n"
+        
+        if images:
+            md += f"![配图]({images[0]})\n\n"
+        
+        if stage2_analysis.get('summary'):
+            md += f"**{stage2_analysis['summary']}**\n\n"
+        
+        key_points = stage2_analysis.get('key_points', [])
+        if key_points:
+            md += "## 比赛亮点\n\n"
+            for point in key_points[:5]:
+                md += f"- {point}\n"
+            md += "\n"
+        
+        if stage2_analysis.get('expert_opinion'):
+            md += f"{stage2_analysis['expert_opinion']}\n\n"
+        
+        if len(images) > 1:
+            md += f"![配图]({images[1]})\n\n"
+        
+        if stage2_analysis.get('impact_analysis'):
+            md += f"**赛后分析**：{stage2_analysis['impact_analysis']}\n\n"
+        
+        if stage2_analysis.get('future_outlook'):
+            md += f"**后续展望**：{stage2_analysis['future_outlook']}\n\n"
+        
+        if stage2_analysis.get('tags'):
+            md += "---\n\n"
+            md += ' '.join([f"#{t.replace(' ', '_')}" for t in stage2_analysis['tags'][:5]])
+            md += "\n"
+        
+        return md
+    
+    @staticmethod
+    def _generate_tech_version(
+        news_title: str,
+        news_source: str,
+        stage2_analysis: Dict,
+        images: List[str] = None
+    ) -> str:
+        """科技新闻模板 - 技术解读风格"""
+        images = images or []
+        md = f"# {news_title}\n\n"
+        
+        if images:
+            md += f"![配图]({images[0]})\n\n"
+        
+        if stage2_analysis.get('summary'):
+            md += f"{stage2_analysis['summary']}\n\n"
+        
+        key_points = stage2_analysis.get('key_points', [])
+        if key_points:
+            md += "## 技术要点\n\n"
+            for i, point in enumerate(key_points[:5], 1):
+                md += f"{i}. {point}\n"
+            md += "\n"
+        
+        if stage2_analysis.get('expert_opinion'):
+            md += f"{stage2_analysis['expert_opinion']}\n\n"
+        
+        if len(images) > 1:
+            md += f"![配图]({images[1]})\n\n"
+        
+        if stage2_analysis.get('background'):
+            md += f"**技术背景**：{stage2_analysis['background']}\n\n"
+        
+        if stage2_analysis.get('impact_analysis'):
+            md += f"**行业影响**：{stage2_analysis['impact_analysis']}\n\n"
+        
+        if stage2_analysis.get('future_outlook'):
+            md += f"**未来趋势**：{stage2_analysis['future_outlook']}\n\n"
+        
+        if stage2_analysis.get('tags'):
+            md += "---\n\n"
+            md += ' '.join([f"#{t.replace(' ', '_')}" for t in stage2_analysis['tags'][:5]])
+            md += "\n"
+        
+        return md
+    
+    @staticmethod
+    def _generate_finance_version(
+        news_title: str,
+        news_source: str,
+        stage2_analysis: Dict,
+        images: List[str] = None
+    ) -> str:
+        """财经新闻模板 - 数据解读风格"""
+        images = images or []
+        md = f"# {news_title}\n\n"
+        
+        if images:
+            md += f"![配图]({images[0]})\n\n"
+        
+        if stage2_analysis.get('summary'):
+            md += f"**{stage2_analysis['summary']}**\n\n"
+        
+        key_points = stage2_analysis.get('key_points', [])
+        if key_points:
+            md += "## 核心要点\n\n"
+            for i, point in enumerate(key_points[:5], 1):
+                md += f"{i}. {point}\n"
+            md += "\n"
+        
+        if stage2_analysis.get('expert_opinion'):
+            md += f"{stage2_analysis['expert_opinion']}\n\n"
+        
+        if len(images) > 1:
+            md += f"![配图]({images[1]})\n\n"
+        
+        if stage2_analysis.get('background'):
+            md += f"**市场背景**：{stage2_analysis['background']}\n\n"
+        
+        if stage2_analysis.get('impact_analysis'):
+            md += f"**市场影响**：{stage2_analysis['impact_analysis']}\n\n"
+        
+        if stage2_analysis.get('future_outlook'):
+            md += f"**投资展望**：{stage2_analysis['future_outlook']}\n\n"
+        
+        if stage2_analysis.get('tags'):
+            md += "---\n\n"
+            md += ' '.join([f"#{t.replace(' ', '_')}" for t in stage2_analysis['tags'][:5]])
+            md += "\n"
+        
+        return md
+    
+    @staticmethod
+    def _generate_breaking_version(
+        news_title: str,
+        news_source: str,
+        stage2_analysis: Dict,
+        images: List[str] = None
+    ) -> str:
+        """突发新闻模板 - 简洁快速"""
+        images = images or []
+        md = f"# ⚡ {news_title}\n\n"
+        
+        if images:
+            md += f"![配图]({images[0]})\n\n"
+        
+        md += f"> **突发** | 来源：{news_source}\n\n"
+        
+        if stage2_analysis.get('summary'):
+            md += f"{stage2_analysis['summary']}\n\n"
+        
+        key_points = stage2_analysis.get('key_points', [])
+        if key_points:
+            md += "## 最新进展\n\n"
+            for point in key_points[:3]:
+                md += f"- {point}\n"
+            md += "\n"
+        
+        if stage2_analysis.get('expert_opinion'):
+            md += f"{stage2_analysis['expert_opinion']}\n\n"
+        
+        if stage2_analysis.get('tags'):
+            md += "---\n\n"
+            md += ' '.join([f"#{t.replace(' ', '_')}" for t in stage2_analysis['tags'][:5]])
+            md += "\n"
+        
+        return md
+    
+    @staticmethod
+    def _generate_standard_version(
+        news_title: str,
+        news_source: str,
+        stage2_analysis: Dict,
+        images: List[str] = None
+    ) -> str:
+        """标准新闻模板 - 通用格式"""
         images = images or []
         
         md = f"# {news_title}\n\n"
         
-        # 正文开头显示封面图（新闻源图片）
         if images:
             md += f"![配图]({images[0]})\n\n"
         
-        # 导语
         if stage2_analysis.get('summary'):
             md += f"{stage2_analysis['summary']}\n\n"
         
-        # 专家点评作为主体内容（AI生成的轻松幽默风格文章）
         if stage2_analysis.get('expert_opinion'):
             md += f"{stage2_analysis['expert_opinion']}\n\n"
         
-        # 正文配图（从第2张开始）
         if len(images) > 1:
             md += f"![配图]({images[1]})\n\n"
         
-        # 背景补充（如果有）
         if stage2_analysis.get('background'):
             md += f"{stage2_analysis['background']}\n\n"
         
-        # 第三张配图（如果有）
         if len(images) > 2:
             md += f"![配图]({images[2]})\n\n"
         
-        # 影响分析（如果有）
         if stage2_analysis.get('impact_analysis'):
             md += f"{stage2_analysis['impact_analysis']}\n\n"
         
-        # 未来展望（如果有）
         if stage2_analysis.get('future_outlook'):
             md += f"{stage2_analysis['future_outlook']}\n\n"
         
-        # 标签（简洁）
         if stage2_analysis.get('tags'):
             md += "---\n\n"
             md += ' '.join([f"#{t.replace(' ', '_')}" for t in stage2_analysis['tags'][:6]])
@@ -208,14 +414,14 @@ class OutputFormatter:
         return md
 
 
-# 便捷函数
 def generate_both_versions(
     news_title: str,
     news_source: str,
     stage1_facts: Dict,
     stage2_analysis: Dict,
     sensitivity_info: Dict,
-    images: List[str] = None
+    images: List[str] = None,
+    category: str = "general"
 ) -> Dict[str, str]:
     """同时生成两个版本"""
     formatter = OutputFormatter()
@@ -225,42 +431,30 @@ def generate_both_versions(
             news_title, news_source, stage1_facts, stage2_analysis, sensitivity_info, images
         ),
         "public": formatter.generate_public_version(
-            news_title, news_source, stage2_analysis, images
+            news_title, news_source, stage2_analysis, images, category
         )
     }
 
 
 if __name__ == "__main__":
-    # 测试
-    test_stage1 = {
-        "basic_facts": {
-            "event_date": "2026-04-13",
-            "location": "Washington D.C.",
-            "key_figures": [{"name": "Donald Trump", "title": "President", "role_in_event": "Host"}],
-            "main_event": "Meeting with Israeli PM"
-        },
-        "timeline": [{"date": "2026-04-13", "event": "Meeting held", "source": "White House"}],
-        "claims_verification": [],
-        "sources": [{"type": "官方", "name": "White House", "credibility": "high"}],
-        "conflicting_info": []
-    }
-    
     test_stage2 = {
-        "summary": "Trump meets Netanyahu to discuss Middle East peace.",
-        "key_points": ["Point 1", "Point 2"],
-        "background": "Background info...",
-        "impact_analysis": "Impact analysis...",
-        "expert_opinion": "Expert opinion...",
-        "tags": ["US", "Israel", "Politics"]
+        "summary": "这是一条测试新闻",
+        "key_points": ["要点1", "要点2", "要点3"],
+        "background": "背景信息...",
+        "impact_analysis": "影响分析...",
+        "future_outlook": "未来展望...",
+        "expert_opinion": "专家点评内容...",
+        "tags": ["测试", "新闻"]
     }
     
-    test_sensitivity = {"level": "high", "reason": "Political meeting"}
+    print("=== 娱乐新闻模板 ===")
+    print(OutputFormatter._generate_entertainment_version("明星动态", "TMZ", test_stage2))
     
-    versions = generate_both_versions(
-        "Test News", "BBC", test_stage1, test_stage2, test_sensitivity
-    )
+    print("\n=== 体育新闻模板 ===")
+    print(OutputFormatter._generate_sports_version("比赛结果", "ESPN", test_stage2))
     
-    print("=== 内部版 ===")
-    print(versions["internal"][:500])
-    print("\n=== 对外版 ===")
-    print(versions["public"][:500])
+    print("\n=== 科技新闻模板 ===")
+    print(OutputFormatter._generate_tech_version("技术突破", "TechCrunch", test_stage2))
+    
+    print("\n=== 财经新闻模板 ===")
+    print(OutputFormatter._generate_finance_version("市场动态", "Financial Times", test_stage2))
