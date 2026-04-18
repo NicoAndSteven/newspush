@@ -22,8 +22,11 @@ else
     echo "[$(date)] 警告: 未找到虚拟环境，使用系统 Python" >> "$LOG_FILE"
 fi
 
-# 执行主程序
-python3 main.py --once >> "$LOG_FILE" 2>&1
+# 执行主程序（-u 禁用输出缓冲，确保日志实时写入）
+echo "[$(date)] 开始执行 main.py..." >> "$LOG_FILE"
+PYTHONUNBUFFERED=1 python3 -u main.py --once >> "$LOG_FILE" 2>&1
+EXIT_CODE=$?
+echo "[$(date)] main.py 执行完成，退出码: $EXIT_CODE" >> "$LOG_FILE"
 
 # 保留最近 30 天的日志
 find "$PROJECT_DIR/logs" -name "newspush_*.log" -mtime +30 -delete

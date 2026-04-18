@@ -52,9 +52,9 @@ fi
 echo "[$(date)] Python 路径: $(which python3)" >> "$LOG_FILE"
 echo "[$(date)] Python 版本: $(python3 --version)" >> "$LOG_FILE"
 
-# 执行主程序
+# 执行主程序（-u 禁用输出缓冲，确保日志实时写入）
 echo "[$(date)] 开始执行 main.py..." >> "$LOG_FILE"
-python3 main.py --once >> "$LOG_FILE" 2>&1
+PYTHONUNBUFFERED=1 python3 -u main.py --once >> "$LOG_FILE" 2>&1
 EXIT_CODE=$?
 echo "[$(date)] main.py 执行完成，退出码: $EXIT_CODE" >> "$LOG_FILE"
 
