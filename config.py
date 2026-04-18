@@ -23,20 +23,59 @@ class Config:
     # 从环境变量获取 API Key（支持 DASHSCOPE_API_KEY 和 OPENAI_API_KEY）
     DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
 
+    # RSS 源配置（带分类）
+    # 格式: (RSS_URL, 分类名称)
+    # 分类: tech, finance, sports, entertainment, world
     RSS_SOURCES = [
-        # BBC 世界新闻
-        "https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/world/rss.xml",
-        # BBC 首页
-        "https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/rss.xml",
-        # The Guardian 世界新闻
-        "https://api.rss2json.com/v1/api.json?rss_url=https://www.theguardian.com/world/rss",
-        # Financial Times 世界新闻
-        "https://api.rss2json.com/v1/api.json?rss_url=https://www.ft.com/world?format=rss",
-        # Al Jazeera
-        "https://api.rss2json.com/v1/api.json?rss_url=https://www.aljazeera.com/xml/rss/all.xml",
+        # ============== 原有源（国际新闻） ==============
+        ("https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/world/rss.xml", "world"),
+        ("https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/rss.xml", "world"),
+        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.theguardian.com/world/rss", "world"),
+        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.ft.com/world?format=rss", "finance"),
+        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.aljazeera.com/xml/rss/all.xml", "world"),
+        
+        # ============== 国内科技 ==============
+        ("https://36kr.com/feed", "tech"),
+        ("https://www.pingwest.com/feed/all", "tech"),
+        ("https://techcrunch.com/feed/", "tech"),
+        
+        # ============== 国内财经 ==============
+        ("https://a.jiemian.com/index.php?m=article&a=rss", "finance"),
+        
+        # ============== 国内体育 ==============
+        ("https://www.dongqiudi.com/rss/feed", "sports"),
+        
+        # ============== 国内娱乐 ==============
+        ("https://www.mgtv.com/rss/news/index.xml", "entertainment"),
+        
+        # ============== 国外体育（中转） ==============
+        ("https://rsstranslator.com/rss?url=https://feeds.bbci.co.uk/sport/rss.xml", "sports"),
+        ("https://rsstranslator.com/rss?url=https://feeds.bbci.co.uk/sport/nba/rss.xml", "sports"),
+        ("https://rsstranslator.com/rss?url=https://feeds.bbci.co.uk/sport/football/rss.xml", "sports"),
+        
+        # ============== 国外财经（中转） ==============
+        ("https://rsstranslator.com/rss?url=https://www.reuters.com/business/rss/", "finance"),
+        ("https://rssbrain.com/feed?url=https://www.bloomberg.com/markets/rss", "finance"),
+        
+        # ============== 好莱坞/国际娱乐（中转） ==============
+        ("https://rsstranslator.com/rss?url=https://variety.com/feed/", "entertainment"),
+        ("https://rssbrain.com/feed?url=https://www.hollywoodreporter.com/feed/", "entertainment"),
+        
+        # ============== 韩国娱乐（中转） ==============
+        ("https://rsstranslator.com/rss?url=https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=14&plink=RSSREADER", "entertainment"),
+        ("https://rsstranslator.com/rss?url=http://imnews.imbc.com/rss/news/news_06.xml", "entertainment"),
+        ("https://rsstranslator.com/rss?url=https://www.yonhapnewstv.co.kr/category/news/culture/feed/", "entertainment"),
+        ("https://rsstranslator.com/rss?url=https://www.soompi.com/feed", "entertainment"),
+        ("https://rsstranslator.com/rss?url=https://www.kpopdigest.com/feed", "entertainment"),
+        ("https://rsstranslator.com/rss?url=https://www.hancinema.net/rss.xml", "entertainment"),
+        ("https://rssbrain.com/feed?url=https://www.bntnews.co.kr/rss/feed", "entertainment"),
     ]
     
-    MAX_NEWS_PER_SOURCE = int(os.getenv("MAX_NEWS_PER_SOURCE", "5"))
+    # 每个板块每次最多抓取的新闻数量
+    MAX_NEWS_PER_CATEGORY = int(os.getenv("MAX_NEWS_PER_CATEGORY", "2"))
+    
+    # 兼容旧配置
+    MAX_NEWS_PER_SOURCE = int(os.getenv("MAX_NEWS_PER_SOURCE", "3"))
     MAX_NEWS_TO_ANALYZE = int(os.getenv("MAX_NEWS_TO_ANALYZE", "10"))
     
     # 微信公众号推送配置

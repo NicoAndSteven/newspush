@@ -97,55 +97,82 @@ class NewsPushPipeline:
     
     def fetch_news(self, hours: int = 1, use_keywords: bool = False):
         """
-        抓取新闻（不保存到本地，仅返回内存中）
-        use_keywords: 是否使用关键词过滤（False=抓取所有新闻）
+        抓取新闻（自动跳过已分析的文章）
+        支持板块均衡：每个板块抓取指定数量的新闻
         """
-        print(f"[{datetime.now()}] 开始抓取新闻...")
+        print(f"[{datetime.now()}] 开始抓取新闻（板块均衡模式）...")
         
-        all_news = []
+        # 按分类组织新闻
+        news_by_category = {}
         
-        for url in config.RSS_SOURCES:
+        for source in config.RSS_SOURCES:
+            # 支持新旧两种配置格式
+            if isinstance(source, tuple):
+                url, category = source
+            else:
+                url, category = source, "general"
+            
             news_items, status = self.news_fetcher.fetch_rss_feed(
                 url, 
-                "general", 
-                max_items=config.MAX_NEWS_PER_SOURCE
+                category, 
+                max_items=config.MAX_NEWS_PER_CATEGORY,
+                skip_analyzed=True  # 在抓取阶段就跳过已分析的文章
             )
-            all_news.extend(news_items)
-            print(f"  从 {url} 获取 {len(news_items)} 条新闻")
+            
+            if category not in news_by_category:
+                news_by_category[category] = []
+            news_by_category[category].extend(news_items)
+            
+            print(f"  [{category}] 从 {url[:50]}... 获取 {len(news_items)} 条新闻")
         
-        # 不再保存原始新闻到本地，只在内存中处理
-        print(f"  共获取 {len(all_news)} 条新闻（不保存原始数据）")
+        # 打印各板块统计
+        print(f"\n  各板块新闻统计:")
+        total_count = 0
+        for cat, items in news_by_category.items():
+            print(f"    - {cat}: {len(items)} 条")
+            total_count += len(items)
         
-        return all_news
+        print(f"  共获取 {total_count} 条新新闻（已跳过已分析的文章）")
+        
+        # 返回按板块组织的新闻
+        return news_by_category
     
-    def deep_analyze_news(self, news_items, depth: AnalysisDepth = AnalysisDepth.DEEP, max_analyze: int = None):
-        """深度分析新闻（集成敏感度检查 + 两阶段分析 + 去重）"""
+    def deep_analyze_news(self, news_by_category, depth: AnalysisDepth = AnalysisDepth.DEEP, max_analyze: int = None):
+        """深度分析新闻（板块均衡：每个板块各挑一篇）
+        
+        Args:
+            news_by_category: 按板块组织的新闻字典 {category: [news_items]}
+            depth: 分析深度
+            max_analyze: 最大分析数量（None=每个板块各分析一篇）
+        """
         if not self.deep_analyzer or not self.two_stage_analyzer:
             print("未配置深度分析 AI API，跳过分析")
             return []
         
-        print(f"[{datetime.now()}] 开始深度分析新闻（{depth.value}模式）...")
+        print(f"[{datetime.now()}] 开始深度分析新闻（{depth.value}模式，板块均衡）...")
+        print(f"  已分析文章总数: {self.storage.get_analyzed_count()} 篇")
         
-        # 限制分析数量
-        if max_analyze is None:
-            max_analyze = config.MAX_NEWS_TO_ANALYZE
-        
-        # 去重：过滤掉已分析的新闻
+        # 板块均衡：每个板块各挑一篇
         news_to_analyze = []
-        skipped_count = 0
-        for item in news_items:
-            if len(news_to_analyze) >= max_analyze:
-                break
-            
-            # 检查是否已分析过
-            if self.storage.is_news_analyzed(item.link):
-                print(f"  [跳过] 已分析过: {item.title[:50]}...")
-                skipped_count += 1
-                continue
-            
-            news_to_analyze.append(item)
         
-        print(f"  将分析 {len(news_to_analyze)} 条新闻（总共 {len(news_items)} 条，跳过已分析 {skipped_count} 条）")
+        if isinstance(news_by_category, dict):
+            # 新格式：按板块组织的新闻
+            for category, items in news_by_category.items():
+                for item in items:
+                    # 检查是否已分析过
+                    if not self.storage.is_news_analyzed(item.link):
+                        news_to_analyze.append(item)
+                        print(f"  [选择] {category}: {item.title[:40]}...")
+                        break  # 每个板块只选一篇
+        else:
+            # 兼容旧格式：列表
+            for item in news_by_category:
+                if len(news_to_analyze) >= (max_analyze or config.MAX_NEWS_TO_ANALYZE):
+                    break
+                if not self.storage.is_news_analyzed(item.link):
+                    news_to_analyze.append(item)
+        
+        print(f"  将分析 {len(news_to_analyze)} 条新闻（各板块各一篇）")
         
         if not news_to_analyze:
             print("  没有需要分析的新新闻")
@@ -214,6 +241,7 @@ class NewsPushPipeline:
             
             # 显示分析结果摘要
             print(f"    [OK] 类型: {result.content_type}")
+            print(f"    [OK] 重要性: {result.importance_level}")
             print(f"    [OK] 紧急度: {result.urgency_level}/10")
             
             # 高敏感新闻提示人工复核
@@ -408,42 +436,46 @@ class NewsPushPipeline:
         
         Args:
             max_fetch: 每个源最多抓取多少条新闻（None=使用配置）
-            max_analyze: 最多分析多少条新闻（None=使用配置）
+            max_analyze: 最多分析多少条新闻（None=每个板块各一篇）
             max_generate: 最多生成多少篇点评（None=使用配置）
             send_email: 是否发送邮件
             cleanup: 是否清理存储
         """
         print("=" * 70)
-        print(f"[{datetime.now()}] NewsPush 完整流水线")
+        print(f"[{datetime.now()}] NewsPush 完整流水线（板块均衡模式）")
         print("=" * 70)
         
-        original_max_per_source = config.MAX_NEWS_PER_SOURCE
         if max_fetch is not None:
-            config.MAX_NEWS_PER_SOURCE = max_fetch
-            print(f"  每个源抓取数量: {max_fetch}")
+            config.MAX_NEWS_PER_CATEGORY = max_fetch
+            print(f"  每个板块抓取数量: {max_fetch}")
         if max_analyze is not None:
-            print(f"  分析数量: {max_analyze}")
+            print(f"  分析数量上限: {max_analyze}")
         if max_generate is not None:
-            print(f"  点评生成数量: {max_generate}")
+            print(f"  点评生成数量上限: {max_generate}")
         print()
         
-        news_items = self.fetch_news(use_keywords=False)
+        news_by_category = self.fetch_news(use_keywords=False)
         
-        config.MAX_NEWS_PER_SOURCE = original_max_per_source
-        
-        if not news_items:
+        if not news_by_category or all(len(items) == 0 for items in news_by_category.values()):
             print("没有获取到新新闻，结束本次执行")
             return
         
-        analyzed = self.deep_analyze_news(news_items, AnalysisDepth.DEEP, max_analyze)
+        analyzed = self.deep_analyze_news(news_by_category, AnalysisDepth.DEEP, max_analyze)
         
         # 如果配置了微信推送，则跳过 Markdown 和 Word 文件生成
         commentaries = self.generate_commentary(analyzed, max_generate=max_generate, skip_files=send_email)
         
+        # 统计总新闻数
+        total_news = sum(len(items) for items in news_by_category.values()) if isinstance(news_by_category, dict) else len(news_by_category)
+        
         print("\n" + "=" * 70)
-        print("📊 执行统计:")
-        print(f"  - 抓取新闻: {len(news_items)} 条")
-        print(f"  - 深度分析: {len(analyzed)} 条")
+        print("执行统计:")
+        print(f"  - 抓取新闻: {total_news} 条")
+        if isinstance(news_by_category, dict):
+            print("  - 各板块:")
+            for cat, items in news_by_category.items():
+                print(f"      {cat}: {len(items)} 条")
+        print(f"  - 深度分析: {len(analyzed)} 条（各板块各一篇）")
         print(f"  - 生成点评: {len(commentaries)} 篇")
         print("=" * 70)
         

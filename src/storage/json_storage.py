@@ -18,10 +18,16 @@ class JSONStorage:
         
         self.news_file = self.data_dir / "news.json"
         self.tasks_file = self.data_dir / "tasks.json"
+        self.analyzed_urls_file = self.data_dir / "analyzed_urls.json"
         
         # 初始化文件
         self._init_file(self.news_file, {"news": []})
         self._init_file(self.tasks_file, {"tasks": []})
+        self._init_file(self.analyzed_urls_file, {"urls": {}})
+        
+        # 缓存已分析的 URL（避免频繁读取文件）
+        self._analyzed_urls_cache = None
+        self._cache_loaded = False
     
     def _init_file(self, file_path: Path, default_data: dict):
         """初始化 JSON 文件"""
@@ -181,17 +187,38 @@ class JSONStorage:
     
     # ========== 已分析文章去重 ==========
     
+    def _load_analyzed_urls(self) -> Dict:
+        """加载已分析 URL 缓存"""
+        if not self._cache_loaded:
+            data = self._load_json(self.analyzed_urls_file)
+            self._analyzed_urls_cache = data.get('urls', {})
+            self._cache_loaded = True
+        return self._analyzed_urls_cache
+    
+    def _save_analyzed_urls(self):
+        """保存已分析 URL"""
+        self._save_json(self.analyzed_urls_file, {"urls": self._analyzed_urls_cache or {}})
+    
     def is_news_analyzed(self, link: str) -> bool:
-        """检查新闻是否已分析过"""
-        data = self._load_json(self.news_file)
-        for item in data.get('news', []):
-            if item['link'] == link:
-                # 检查是否有分析标记
-                return item.get('analyzed', False)
-        return False
+        """检查新闻是否已分析过（使用独立的 URL 记录）"""
+        if not link:
+            return False
+        urls = self._load_analyzed_urls()
+        return link in urls
     
     def mark_news_as_analyzed(self, link: str, analysis_result: Dict = None):
-        """标记新闻为已分析"""
+        """标记新闻为已分析（使用独立的 URL 记录）"""
+        if not link:
+            return
+        urls = self._load_analyzed_urls()
+        urls[link] = {
+            'analyzed_at': datetime.now().isoformat(),
+            'summary': analysis_result.get('summary', '') if analysis_result else '',
+            'content_type': analysis_result.get('content_type', '') if analysis_result else ''
+        }
+        self._save_analyzed_urls()
+        
+        # 同时更新 news.json 中的标记（兼容旧逻辑）
         data = self._load_json(self.news_file)
         for item in data.get('news', []):
             if item['link'] == link:
@@ -234,9 +261,10 @@ class JSONStorage:
     
     def clear_old_analyzed_news(self, keep_days: int = 7):
         """清理已分析的旧新闻（保留最近 N 天）"""
-        data = self._load_json(self.news_file)
         cutoff_time = datetime.now() - timedelta(days=keep_days)
         
+        # 清理 news.json
+        data = self._load_json(self.news_file)
         filtered_news = []
         for item in data.get('news', []):
             # 保留未分析的
@@ -254,7 +282,28 @@ class JSONStorage:
         
         data['news'] = filtered_news
         self._save_json(self.news_file, data)
+        
+        # 清理 analyzed_urls.json
+        urls = self._load_analyzed_urls()
+        filtered_urls = {}
+        for url, info in urls.items():
+            try:
+                analyzed_time = datetime.fromisoformat(info.get('analyzed_at', ''))
+                if analyzed_time >= cutoff_time:
+                    filtered_urls[url] = info
+            except:
+                # 如果没有时间信息，保留
+                filtered_urls[url] = info
+        
+        self._analyzed_urls_cache = filtered_urls
+        self._save_analyzed_urls()
+        
         return len(filtered_news)
+    
+    def get_analyzed_count(self) -> int:
+        """获取已分析文章的数量"""
+        urls = self._load_analyzed_urls()
+        return len(urls)
 
 
 # 全局实例

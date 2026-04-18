@@ -185,13 +185,15 @@ class TwoStageAnalyzer:
 {{
     "summary": "导语（一句话，包含核心事实）",
     "content_type": "breaking/tech/finance/social/politics",
+    "importance_level": "重要性等级：critical（重大事件）/important（重要新闻）/normal（普通新闻）",
     "key_points": ["3-5个核心要点，每个必须有数据支撑"],
-    "background": "背景（聚焦当前，历史脉络点到为止，≥200字）",
+    "background": "背景（聚焦当前，历史脉络点到为止）",
     "impact_analysis": "影响分析（具体，含连锁反应）",
     "future_outlook": "展望（最可能+最坏场景）",
     "unique_angle": "独特视角（具体、有新意）",
     "controversial_aspects": ["争议点（呈现多方逻辑）"],
     "expert_opinion": "专家点评（专业克制风格）",
+    "commentary": "根据重要性等级生成点评文章（critical:2000-3000字深度分析，important:800-1500字标准分析，normal:200-400字简洁概括）",
     "tags": ["5-8个标签"],
     "sentiment": "positive/negative/neutral/mixed",
     "urgency_level": 1-10,
@@ -222,6 +224,7 @@ class TwoStageAnalyzer:
                 title=title,
                 summary=result_json.get("summary", ""),
                 content_type=result_json.get("content_type", "news"),
+                importance_level=result_json.get("importance_level", "normal"),
                 key_points=result_json.get("key_points", []),
                 background=result_json.get("background", ""),
                 impact_analysis=result_json.get("impact_analysis", ""),
@@ -238,7 +241,8 @@ class TwoStageAnalyzer:
                 is_video_worthy=False,
                 video_hooks=[],
                 credibility=result_json.get("credibility", {"level": "medium", "issues": [], "notes": ""}),
-                core_facts=stage1_facts.get("basic_facts", {})
+                core_facts=stage1_facts.get("basic_facts", {}),
+                commentary=result_json.get("commentary", "")
             )
             
         except Exception as e:

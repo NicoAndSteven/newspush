@@ -24,31 +24,32 @@ class DeepAnalysisResult:
     title: str
     summary: str
     content_type: str
+    importance_level: str = "normal"  # critical/important/normal
     
     # 深度分析
-    key_points: List[str]
-    background: str
-    impact_analysis: str
-    future_outlook: str
+    key_points: List[str] = None
+    background: str = ""
+    impact_analysis: str = ""
+    future_outlook: str = ""
     
     # 观点与角度
-    unique_angle: str
-    controversial_aspects: List[str]
-    expert_opinion: str
+    unique_angle: str = ""
+    controversial_aspects: List[str] = None
+    expert_opinion: str = ""
     
     # 多平台适配内容
-    platform_contents: Dict[str, str]
+    platform_contents: Dict[str, str] = None
     
     # 元数据
-    tags: List[str]
-    sentiment: str
-    urgency_level: int  # 1-10
-    target_audience: List[str]
-    suggested_platforms: List[str]
+    tags: List[str] = None
+    sentiment: str = "neutral"
+    urgency_level: int = 5
+    target_audience: List[str] = None
+    suggested_platforms: List[str] = None
     
     # 视频相关（保留）
-    is_video_worthy: bool
-    video_hooks: List[str]
+    is_video_worthy: bool = False
+    video_hooks: List[str] = None
     video_script: Optional[Dict] = None
     
     # 可信度评估
@@ -59,6 +60,22 @@ class DeepAnalysisResult:
     
     # 点评文章（合并调用时使用）
     commentary: str = ""
+    
+    def __post_init__(self):
+        if self.key_points is None:
+            self.key_points = []
+        if self.controversial_aspects is None:
+            self.controversial_aspects = []
+        if self.platform_contents is None:
+            self.platform_contents = {}
+        if self.tags is None:
+            self.tags = []
+        if self.target_audience is None:
+            self.target_audience = []
+        if self.suggested_platforms is None:
+            self.suggested_platforms = []
+        if self.video_hooks is None:
+            self.video_hooks = []
     
     def to_dict(self):
         return asdict(self)
@@ -188,8 +205,10 @@ class DeepNewsAnalyzer:
     "summary": "一句话总结新闻核心（包含具体人物和事件，作为文章导语）",
     "content_type": "内容类型：breaking突发/tech科技/finance财经/social社会/entertainment娱乐/politics政治/lifestyle生活",
     
+    "importance_level": "重要性等级：critical（重大事件，如战争、灾难、重大政策）/important（重要新闻，如经济数据、外交动态）/normal（普通新闻，如日常社会事件）",
+    
     "key_points": ["3-5个核心要点（每个要点必须包含具体事实，不能只是抽象概括）"],
-    "background": "事件背景（聚焦当前局势和最近发展，历史脉络简要点明即可，不少于200字）",
+    "background": "事件背景（聚焦当前局势和最近发展，历史脉络简要点明即可）",
     "impact_analysis": "影响分析（具体说明对哪些方面有影响，用数据或案例支撑，包括潜在连锁反应）",
     "future_outlook": "未来趋势预测（基于当前局势的具体预判，包括最可能和最坏两种场景）",
     
@@ -197,7 +216,7 @@ class DeepNewsAnalyzer:
     "controversial_aspects": ["争议点（具体说明各方立场和分歧原因，包括潜在升级风险）"],
     "expert_opinion": "专家视角点评（结合具体事实进行深度分析，避免空洞的'弱国无外交'式套话）",
     
-    "commentary": "轻松幽默的点评文章（1000-1500字，像聪明朋友在吐槽国际新闻，口语化表达，不要用括号、官腔和模板词汇，段落分明每段不超过200字，直接输出正文）",
+    "commentary": "根据新闻重要性生成点评文章（见下方篇幅和风格要求）",
     
     "platform_contents": {{
         "wechat": "适合微信公众号的长文点评（800-1500字，包含具体事实和深度分析）",
@@ -223,11 +242,43 @@ class DeepNewsAnalyzer:
     }}
 }}
 
+【点评文章的篇幅和风格要求】
+
+**篇幅规则**：
+- importance_level 为 "critical"（重大事件）：2000-3000字，深度分析
+- importance_level 为 "important"（重要新闻）：800-1500字，标准分析
+- importance_level 为 "normal"（普通新闻）：200-400字，简洁概括
+
+**风格规则**：
+1. **严肃新闻**（战争、灾难、重大政治事件、伤亡事件）：
+   - 使用严谨、客观、专业的语气
+   - 避免幽默、调侃、讽刺
+   - 聚焦事实和深度分析
+   - 体现对事件的尊重和严肃态度
+   
+2. **一般新闻**（经济、科技、外交、政策）：
+   - 使用专业但平易近人的语气
+   - 可以适度比喻和类比帮助理解
+   - 保持客观但有观点
+   - 避免过度娱乐化
+   
+3. **轻松新闻**（娱乐、体育、生活方式、趣闻）：
+   - 可以使用轻松幽默的语气
+   - 适当调侃和风趣表达
+   - 口语化但不低俗
+
+【禁止事项】
+- 不要用括号补充说明
+- 不要用"值得注意的是""需要指出的是"等官腔
+- 不要用"首先、其次、最后"等模板结构
+- 不要用"这一事件标志着""具有里程碑意义"等套话
+- 不要用"某国""某组织""某人物"等模糊表述
+
 要求：
-1. **具体性**：每个字段都必须包含具体信息，拒绝"某国""某组织""某人物"等模糊表述
+1. **具体性**：每个字段都必须包含具体信息
 2. **深度**：分析要有独到见解，避免正确但空洞的套话
 3. **准确性**：人名、地名、数据等必须准确，不确定的加限定语
-4. **信息密度**：每段话都有实质内容，读者读完后应清楚"到底发生了什么"
+4. **信息密度**：每段话都有实质内容
 5. **时效性**：背景分析聚焦当前局势，历史脉络点到为止
 6. **风险尖锐化**：分析风险时具体说明升级路径、连锁反应、最坏场景
 """
@@ -294,6 +345,7 @@ class DeepNewsAnalyzer:
                 title=title,
                 summary=result_json.get("summary", ""),
                 content_type=result_json.get("content_type", "news"),
+                importance_level=result_json.get("importance_level", "normal"),
                 key_points=result_json.get("key_points", []),
                 background=result_json.get("background", ""),
                 impact_analysis=result_json.get("impact_analysis", ""),
@@ -414,40 +466,83 @@ class CommentaryGenerator:
         self.analyzer = analyzer
     
     def generate_commentary(self, analysis: DeepAnalysisResult, style: str = "balanced") -> str:
-        """生成新闻点评"""
+        """生成新闻点评（根据新闻类型自动选择风格和篇幅）"""
         
         # 检查分析器是否可用
         if not self.analyzer or not self.analyzer.client:
             print(f"  [错误] AI 客户端未初始化，无法生成点评")
             return ""
         
-        style_prompt = {
-            "balanced": "客观平衡，多角度分析",
-            "critical": "批判性思维，质疑主流观点",
-            "optimistic": "积极乐观，关注机会",
-            "provocative": "观点鲜明，引发讨论",
-            "storytelling": "讲故事风格，引人入胜"
-        }
+        # 根据重要性等级确定篇幅
+        importance = getattr(analysis, 'importance_level', 'normal')
+        content_type = analysis.content_type
         
-        prompt = f"""你是一个聪明幽默的国际新闻评论员，正在给朋友们讲新闻。请基于以下分析，写一篇轻松有趣、带点调侃的点评文章：
+        # 篇幅设置
+        length_config = {
+            "critical": {"min": 2000, "max": 3000, "desc": "2000-3000字深度分析"},
+            "important": {"min": 800, "max": 1500, "desc": "800-1500字标准分析"},
+            "normal": {"min": 200, "max": 400, "desc": "200-400字简洁概括"}
+        }
+        length = length_config.get(importance, length_config["normal"])
+        
+        # 判断是否为严肃新闻
+        serious_types = ["breaking", "politics"]
+        serious_keywords = ["战争", "冲突", "灾难", "死亡", "伤亡", "袭击", "恐怖", "危机"]
+        is_serious = (
+            content_type in serious_types or
+            any(kw in analysis.title for kw in serious_keywords) or
+            any(kw in analysis.summary for kw in serious_keywords) or
+            analysis.urgency_level >= 8
+        )
+        
+        # 根据新闻类型选择风格
+        if is_serious:
+            style_guide = """【风格：严谨专业】
+这是一篇严肃新闻，请使用严谨、客观、专业的语气：
+- 避免幽默、调侃、讽刺
+- 聚焦事实和深度分析
+- 体现对事件的尊重和严肃态度
+- 使用专业但易懂的语言
+- 结构清晰，逻辑严密"""
+        elif content_type in ["entertainment", "lifestyle"]:
+            style_guide = """【风格：轻松幽默】
+这是一篇轻松新闻，可以使用轻松幽默的语气：
+- 像聪明朋友在聊天一样
+- 可以适当调侃和风趣表达
+- 口语化但不低俗
+- 让人读起来轻松愉快"""
+        else:
+            style_guide = """【风格：专业平易】
+这是一篇一般新闻，请使用专业但平易近人的语气：
+- 可以适度比喻和类比帮助理解
+- 保持客观但有观点
+- 避免过度娱乐化
+- 语言简洁有力"""
+        
+        prompt = f"""请基于以下分析，写一篇新闻点评文章：
 
 新闻标题：{analysis.title}
+重要性等级：{importance}（{length['desc']}）
+内容类型：{content_type}
 核心要点：{', '.join(analysis.key_points)}
 背景：{analysis.background}
 影响分析：{analysis.impact_analysis}
 独特角度：{analysis.unique_angle}
 争议点：{', '.join(analysis.controversial_aspects)}
 
-【写作风格要求】
-1. **语气轻松幽默**：像聪明朋友在吐槽国际新闻一样，可以适当讽刺和自嘲，但不要刻薄或低俗
-2. **拒绝括号**：正文中尽量不用括号，能用破折号、冒号或直接融入句子就不用括号
-3. **口语化表达**：避免"极限施压""切香肠战术""外交悖论""恶性循环""标志性""系统性"等严肃模板词汇，用生活化语言替代
-4. **标题要吸引人**：开头第一句就是标题，要带点幽默、反讽或反转感，让人眼前一亮
-5. **导语要有趣**：开头几句话要轻松有趣，让人想继续往下读
-6. **结构自然流畅**：不要用"核心事实""深度分析""多方视角"等生硬小标题，让文章像专栏评论一样自然流动
-7. **事实必须准确**：核心信息不能编造，但要用轻松的方式讲出来，不要板着脸严肃分析
-8. **字数控制**：1000-1500字，和原文差不多长度
-9. **直接点名**：不要用"某国""某组织""某人物"等模糊表述
+{style_guide}
+
+【篇幅要求】
+- 字数：{length['min']}-{length['max']}字
+- 重要性为 critical 时：深度分析，多角度解读
+- 重要性为 important 时：标准分析，重点突出
+- 重要性为 normal 时：简洁概括，点到为止
+
+【写作规范】
+1. **结构自然流畅**：不要用"核心事实""深度分析"等生硬小标题
+2. **事实必须准确**：核心信息不能编造
+3. **直接点名**：不要用"某国""某组织""某人物"等模糊表述
+4. **信息密度**：每段话都有实质内容
 
 【禁止事项】
 - 不要用括号补充说明

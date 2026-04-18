@@ -160,12 +160,16 @@ class OutputFormatter:
         - 适合直接发布
         
         图片说明：
-        - images[0] 为封面图（不在正文中显示）
-        - images[1:] 为正文配图
+        - images[0] 同时作为封面图和正文开头图片
+        - images[1:] 作为正文配图穿插
         """
         images = images or []
         
         md = f"# {news_title}\n\n"
+        
+        # 正文开头显示封面图（新闻源图片）
+        if images:
+            md += f"![配图]({images[0]})\n\n"
         
         # 导语
         if stage2_analysis.get('summary'):
@@ -175,7 +179,7 @@ class OutputFormatter:
         if stage2_analysis.get('expert_opinion'):
             md += f"{stage2_analysis['expert_opinion']}\n\n"
         
-        # 正文配图（从第2张开始，第1张是封面）
+        # 正文配图（从第2张开始）
         if len(images) > 1:
             md += f"![配图]({images[1]})\n\n"
         
@@ -183,7 +187,7 @@ class OutputFormatter:
         if stage2_analysis.get('background'):
             md += f"{stage2_analysis['background']}\n\n"
         
-        # 第二张正文配图（如果有）
+        # 第三张配图（如果有）
         if len(images) > 2:
             md += f"![配图]({images[2]})\n\n"
         

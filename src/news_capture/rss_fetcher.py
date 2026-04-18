@@ -300,7 +300,7 @@ class RSSNewsFetcher:
     def __init__(self, storage: JSONStorage = None):
         self.storage = storage or JSONStorage()
     
-    def fetch_rss_feed(self, url: str, category: str = "general", timeout: int = 10, max_items: int = 5) -> Tuple[List[NewsItem], str]:
+    def fetch_rss_feed(self, url: str, category: str = "general", timeout: int = 10, max_items: int = 5, skip_analyzed: bool = True) -> Tuple[List[NewsItem], str]:
         """
         抓取 RSS 订阅源
         支持两种格式:
@@ -312,6 +312,7 @@ class RSSNewsFetcher:
             category: 分类
             timeout: 超时时间
             max_items: 最多抓取多少条新闻（默认5条）
+            skip_analyzed: 是否跳过已分析的文章（默认True）
         
         Returns:
             (新闻列表, 状态信息)
@@ -336,6 +337,7 @@ class RSSNewsFetcher:
                 return [], f"request_error: {e}"
             
             news_items = []
+            skipped_count = 0
             
             # 判断是 rss2json.com 的 JSON 格式还是标准 RSS XML
             if 'rss2json.com' in url:
@@ -345,7 +347,17 @@ class RSSNewsFetcher:
                     items = data.get('items', [])
                     feed_title = data.get('feed', {}).get('title', url)
                     
-                    for entry in items[:max_items]:
+                    for entry in items:
+                        link = entry.get('link', '')
+                        
+                        # 去重检查：跳过已分析的文章
+                        if skip_analyzed and self.storage.is_news_analyzed(link):
+                            skipped_count += 1
+                            continue
+                        
+                        if len(news_items) >= max_items:
+                            break
+                        
                         title = clean_html(entry.get('title', ''))
                         description = clean_html(entry.get('description', ''))
                         
@@ -363,7 +375,7 @@ class RSSNewsFetcher:
                         
                         news_item = NewsItem(
                             title=title,
-                            link=entry.get('link', ''),
+                            link=link,
                             description=description,
                             published=entry.get('pubDate', datetime.now().isoformat()),
                             source=feed_title,
@@ -383,7 +395,17 @@ class RSSNewsFetcher:
                 if feed.bozo and hasattr(feed, 'bozo_exception'):
                     print(f"[RSS] Parse warning for {url}: {feed.bozo_exception}")
                 
-                for entry in feed.entries[:max_items]:
+                for entry in feed.entries:
+                    link = entry.get('link', '')
+                    
+                    # 去重检查：跳过已分析的文章
+                    if skip_analyzed and self.storage.is_news_analyzed(link):
+                        skipped_count += 1
+                        continue
+                    
+                    if len(news_items) >= max_items:
+                        break
+                    
                     title = clean_html(entry.get('title', ''))
                     description = clean_html(entry.get('summary', entry.get('description', '')))
                     
@@ -408,7 +430,7 @@ class RSSNewsFetcher:
                     
                     news_item = NewsItem(
                         title=title,
-                        link=entry.get('link', ''),
+                        link=link,
                         description=description,
                         published=entry.get('published', datetime.now().isoformat()),
                         source=feed.feed.get('title', url),
@@ -418,7 +440,10 @@ class RSSNewsFetcher:
                     )
                     news_items.append(news_item)
             
-            print(f"[RSS] Fetched {len(news_items)} items from {url}")
+            if skipped_count > 0:
+                print(f"[RSS] Fetched {len(news_items)} items from {url} (skipped {skipped_count} already analyzed)")
+            else:
+                print(f"[RSS] Fetched {len(news_items)} items from {url}")
             return news_items, "success"
             
         except Exception as e:
@@ -427,7 +452,8 @@ class RSSNewsFetcher:
     
     def fetch_multiple_feeds(self, rss_sources: List[Tuple[str, str]], max_workers: int = 3, 
                             timeout: int = 10, fetch_full_content: bool = True,
-                            max_items_per_source: int = 5, max_total_news: int = 20) -> Dict:
+                            max_items_per_source: int = 5, max_total_news: int = 20,
+                            skip_analyzed: bool = True) -> Dict:
         """
         并发抓取多个 RSS 源
         
@@ -438,6 +464,7 @@ class RSSNewsFetcher:
             fetch_full_content: 是否抓取完整内容
             max_items_per_source: 每个源最多抓取多少条（默认5）
             max_total_news: 总共最多抓取多少条（默认20）
+            skip_analyzed: 是否跳过已分析的文章（默认True）
             
         Returns:
             {
@@ -462,6 +489,8 @@ class RSSNewsFetcher:
         
         print(f"[RSS] Starting to fetch {len(rss_sources)} feeds with {max_workers} workers...")
         print(f"[RSS] Max {max_items_per_source} items per source, max {max_total_news} total")
+        if skip_analyzed:
+            print(f"[RSS] Will skip already analyzed articles")
         if fetch_full_content:
             print(f"[RSS] Will also fetch full content for each article")
         start_time = time.time()
@@ -469,7 +498,7 @@ class RSSNewsFetcher:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交所有任务
             future_to_url = {
-                executor.submit(self.fetch_rss_feed, url, category, timeout, max_items_per_source): (url, category)
+                executor.submit(self.fetch_rss_feed, url, category, timeout, max_items_per_source, skip_analyzed): (url, category)
                 for url, category in rss_sources
             }
             
