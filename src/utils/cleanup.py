@@ -128,7 +128,8 @@ def cleanup_all_results(
                 directory=directory,
                 max_age_hours=max_age_hours,
                 keep_latest=keep_latest,
-                dry_run=dry_run
+                dry_run=dry_run,
+                exclude_files=exclude_files
             )
             total_result['deleted_count'] += result['deleted_count']
             total_result['deleted_size'] += result['deleted_size']

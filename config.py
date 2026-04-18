@@ -28,7 +28,6 @@ class Config:
     # 分类: tech, finance, sports, entertainment, world
     RSS_SOURCES = [
         # ============== 国际新闻 ==============
-        # 直接使用原始 RSS 源，不通过 rss2json（避免 API 限制）
         ("https://feeds.bbci.co.uk/news/world/rss.xml", "world"),
         ("https://www.theguardian.com/world/rss", "world"),
         ("https://feeds.npr.org/1001/rss.xml", "world"),
@@ -36,17 +35,16 @@ class Config:
         # ============== 科技新闻 ==============
         ("https://36kr.com/feed", "tech"),
         ("https://techcrunch.com/feed/", "tech"),
-        ("https://feeds.arstechnica.com/arstechnica/index", "tech"),
         
         # ============== 财经新闻 ==============
         ("https://a.jiemian.com/index.php?m=article&a=rss", "finance"),
         
         # ============== 体育新闻 ==============
-        ("https://www.espn.com/espn/rss/news", "sports"),
-        ("https://www.cbssports.com/rss/headlines/", "sports"),
+        ("https://www.espn.com/espn/rss/soccer/news", "sports"),
+        ("https://www.espn.com/espn/rss/espnu/news", "sports"),
         
-        # ============== 娱乐新闻 ==============
-        ("https://www.billboard.com/feed/", "entertainment"),
+        # ============== 娱乐八卦 ==============
+        ("https://www.tmz.com/rss.xml", "entertainment"),
     ]
     
     # 每个板块每次最多抓取的新闻数量

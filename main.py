@@ -154,28 +154,31 @@ class NewsPushPipeline:
         return news_by_category
     
     def deep_analyze_news(self, news_by_category, depth: AnalysisDepth = AnalysisDepth.DEEP, max_analyze: int = None):
-        """深度分析新闻（板块均衡：每个板块各挑一篇）
+        """深度分析新闻
         
         Args:
             news_by_category: 按板块组织的新闻字典 {category: [news_items]}
             depth: 分析深度
-            max_analyze: 最大分析数量（None=每个板块各分析一篇）
+            max_analyze: 最大分析数量（None=每个板块各一篇，共约5篇）
         """
         if not self.deep_analyzer or not self.two_stage_analyzer:
             print("未配置深度分析 AI API，跳过分析")
             return []
         
-        print(f"[{datetime.now()}] 开始深度分析新闻（{depth.value}模式，板块均衡）...")
+        print(f"[{datetime.now()}] 开始深度分析新闻（{depth.value}模式）...")
         print(f"  已分析文章总数: {self.storage.get_analyzed_count()} 篇")
         print(f"  已推送文章总数: {self.storage.get_pushed_count()} 篇")
         
         news_to_analyze = []
-        selected_links = set()  # 记录已选择的链接，防止重复
+        selected_links = set()
+        
+        if max_analyze is None:
+            max_analyze = 5  # 默认每个板块各一篇，共约5篇
         
         if isinstance(news_by_category, dict):
+            # 板块均衡：每个板块各选一篇
             for category, items in news_by_category.items():
                 for item in items:
-                    # 多重检查：已分析 + 已推送 + 已选择
                     if item.link in selected_links:
                         continue
                     if self.storage.is_news_analyzed(item.link):
@@ -187,9 +190,29 @@ class NewsPushPipeline:
                     selected_links.add(item.link)
                     print(f"  [选择] {category}: {item.title[:40]}...")
                     break  # 每个板块只选一篇
+            
+            # 如果还不够，继续从各板块选第二篇
+            if len(news_to_analyze) < max_analyze:
+                for category, items in news_by_category.items():
+                    if len(news_to_analyze) >= max_analyze:
+                        break
+                    count_in_category = sum(1 for n in news_to_analyze if getattr(n, 'category', '') == category)
+                    if count_in_category >= 2:  # 每个板块最多2篇
+                        continue
+                    for item in items:
+                        if item.link in selected_links:
+                            continue
+                        if self.storage.is_news_analyzed(item.link):
+                            continue
+                        if self.storage.is_news_pushed(item.link):
+                            continue
+                        news_to_analyze.append(item)
+                        selected_links.add(item.link)
+                        print(f"  [选择] {category}: {item.title[:40]}...")
+                        break
         else:
             for item in news_by_category:
-                if len(news_to_analyze) >= (max_analyze or config.MAX_NEWS_TO_ANALYZE):
+                if len(news_to_analyze) >= max_analyze:
                     break
                 if item.link in selected_links:
                     continue
@@ -200,7 +223,7 @@ class NewsPushPipeline:
                 news_to_analyze.append(item)
                 selected_links.add(item.link)
         
-        print(f"  将分析 {len(news_to_analyze)} 条新闻（各板块各一篇）")
+        print(f"  将分析 {len(news_to_analyze)} 条新闻")
         
         if not news_to_analyze:
             print("  没有需要分析的新新闻")
@@ -516,8 +539,9 @@ class NewsPushPipeline:
             print("  - 各板块:")
             for cat, items in news_by_category.items():
                 print(f"      {cat}: {len(items)} 条")
-        print(f"  - 深度分析: {len(analyzed)} 条（各板块各一篇）")
+        print(f"  - 深度分析: {len(analyzed)} 条")
         print(f"  - 生成点评: {len(commentaries)} 篇")
+        print(f"  - 将推送: {len(commentaries)} 篇")
         print("=" * 70)
         
         if send_email and commentaries:
