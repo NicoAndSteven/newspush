@@ -26,19 +26,18 @@ class Config:
     # RSS 源配置（带分类）
     # 格式: (RSS_URL, 分类名称)
     # 分类: tech, finance, sports, entertainment, world
+    # rss2json.com 添加 &count=20 参数获取更多新闻
     RSS_SOURCES = [
         # ============== 国际新闻 ==============
-        ("https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/world/rss.xml", "world"),
-        ("https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/rss.xml", "world"),
-        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.theguardian.com/world/rss", "world"),
-        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.ft.com/world?format=rss", "finance"),
-        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.aljazeera.com/xml/rss/all.xml", "world"),
+        ("https://api.rss2json.com/v1/api.json?rss_url=https://feeds.bbci.co.uk/news/world/rss.xml&count=20", "world"),
+        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.theguardian.com/world/rss&count=20", "world"),
+        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.ft.com/world?format=rss&count=20", "finance"),
+        ("https://api.rss2json.com/v1/api.json?rss_url=https://www.aljazeera.com/xml/rss/all.xml&count=20", "world"),
         ("https://feeds.npr.org/1001/rss.xml", "world"),
         
         # ============== 科技新闻 ==============
         ("https://36kr.com/feed", "tech"),
         ("https://techcrunch.com/feed/", "tech"),
-        ("https://www.theverge.com/rss/index.xml", "tech"),
         ("https://feeds.arstechnica.com/arstechnica/index", "tech"),
         
         # ============== 财经新闻 ==============
@@ -49,12 +48,11 @@ class Config:
         ("https://www.cbssports.com/rss/headlines/", "sports"),
         
         # ============== 娱乐新闻 ==============
-        ("https://www.tmz.com/rss.xml", "entertainment"),
         ("https://www.billboard.com/feed/", "entertainment"),
     ]
     
     # 每个板块每次最多抓取的新闻数量
-    MAX_NEWS_PER_CATEGORY = int(os.getenv("MAX_NEWS_PER_CATEGORY", "2"))
+    MAX_NEWS_PER_CATEGORY = int(os.getenv("MAX_NEWS_PER_CATEGORY", "5"))
     
     # 兼容旧配置
     MAX_NEWS_PER_SOURCE = int(os.getenv("MAX_NEWS_PER_SOURCE", "3"))

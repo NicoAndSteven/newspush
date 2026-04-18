@@ -97,44 +97,60 @@ class NewsPushPipeline:
     
     def fetch_news(self, hours: int = 1, use_keywords: bool = False):
         """
-        抓取新闻（自动跳过已分析的文章）
-        支持板块均衡：每个板块抓取指定数量的新闻
-        """
-        print(f"[{datetime.now()}] 开始抓取新闻（板块均衡模式）...")
+        抓取新闻（退步原则：优先最新，已分析则抓取更多）
         
-        # 按分类组织新闻
+        退步原则：
+        1. 优先抓取最新的新闻
+        2. 如果最新新闻已分析过，自动扩大抓取范围
+        3. 直到获取足够的新新闻或达到最大抓取限制
+        """
+        print(f"[{datetime.now()}] 开始抓取新闻（退步原则模式）...")
+        
         news_by_category = {}
+        seen_links = set()
+        
+        # 退步原则：初始抓取数量 → 最大抓取数量
+        initial_fetch = config.MAX_NEWS_PER_CATEGORY  # 初始：5条
+        max_fetch = initial_fetch * 4  # 最大：20条
         
         for source in config.RSS_SOURCES:
-            # 支持新旧两种配置格式
             if isinstance(source, tuple):
                 url, category = source
             else:
                 url, category = source, "general"
             
+            # 第一轮：尝试抓取初始数量
             news_items, status = self.news_fetcher.fetch_rss_feed(
-                url, 
-                category, 
-                max_items=config.MAX_NEWS_PER_CATEGORY,
-                skip_analyzed=True  # 在抓取阶段就跳过已分析的文章
+                url, category, max_items=initial_fetch, skip_analyzed=True
             )
+            
+            # 退步原则：如果抓到的新闻太少，扩大抓取范围
+            if len(news_items) < initial_fetch // 2:
+                print(f"  [{category}] 首轮仅获取 {len(news_items)} 条，尝试扩大抓取...")
+                news_items, status = self.news_fetcher.fetch_rss_feed(
+                    url, category, max_items=max_fetch, skip_analyzed=True
+                )
             
             if category not in news_by_category:
                 news_by_category[category] = []
-            news_by_category[category].extend(news_items)
             
-            print(f"  [{category}] 从 {url[:50]}... 获取 {len(news_items)} 条新闻")
+            added_count = 0
+            for item in news_items:
+                if item.link not in seen_links:
+                    news_by_category[category].append(item)
+                    seen_links.add(item.link)
+                    added_count += 1
+            
+            print(f"  [{category}] 从 {url[:50]}... 获取 {added_count} 条新闻")
         
-        # 打印各板块统计
         print(f"\n  各板块新闻统计:")
         total_count = 0
         for cat, items in news_by_category.items():
             print(f"    - {cat}: {len(items)} 条")
             total_count += len(items)
         
-        print(f"  共获取 {total_count} 条新新闻（已跳过已分析的文章）")
+        print(f"  共获取 {total_count} 条新新闻")
         
-        # 返回按板块组织的新闻
         return news_by_category
     
     def deep_analyze_news(self, news_by_category, depth: AnalysisDepth = AnalysisDepth.DEEP, max_analyze: int = None):
@@ -151,26 +167,38 @@ class NewsPushPipeline:
         
         print(f"[{datetime.now()}] 开始深度分析新闻（{depth.value}模式，板块均衡）...")
         print(f"  已分析文章总数: {self.storage.get_analyzed_count()} 篇")
+        print(f"  已推送文章总数: {self.storage.get_pushed_count()} 篇")
         
-        # 板块均衡：每个板块各挑一篇
         news_to_analyze = []
+        selected_links = set()  # 记录已选择的链接，防止重复
         
         if isinstance(news_by_category, dict):
-            # 新格式：按板块组织的新闻
             for category, items in news_by_category.items():
                 for item in items:
-                    # 检查是否已分析过
-                    if not self.storage.is_news_analyzed(item.link):
-                        news_to_analyze.append(item)
-                        print(f"  [选择] {category}: {item.title[:40]}...")
-                        break  # 每个板块只选一篇
+                    # 多重检查：已分析 + 已推送 + 已选择
+                    if item.link in selected_links:
+                        continue
+                    if self.storage.is_news_analyzed(item.link):
+                        continue
+                    if self.storage.is_news_pushed(item.link):
+                        continue
+                    
+                    news_to_analyze.append(item)
+                    selected_links.add(item.link)
+                    print(f"  [选择] {category}: {item.title[:40]}...")
+                    break  # 每个板块只选一篇
         else:
-            # 兼容旧格式：列表
             for item in news_by_category:
                 if len(news_to_analyze) >= (max_analyze or config.MAX_NEWS_TO_ANALYZE):
                     break
-                if not self.storage.is_news_analyzed(item.link):
-                    news_to_analyze.append(item)
+                if item.link in selected_links:
+                    continue
+                if self.storage.is_news_analyzed(item.link):
+                    continue
+                if self.storage.is_news_pushed(item.link):
+                    continue
+                news_to_analyze.append(item)
+                selected_links.add(item.link)
         
         print(f"  将分析 {len(news_to_analyze)} 条新闻（各板块各一篇）")
         
@@ -268,29 +296,40 @@ class NewsPushPipeline:
         
         print(f"[{datetime.now()}] 开始生成新闻点评（双版本）...")
         
-        # 如果没有指定生成数量，则生成数量 = 分析数量（一对一）
         if max_generate is None:
             max_generate = len(analyzed_items)
         
         commentaries = []
         generated_count = 0
         skipped_count = 0
+        processed_links = set()  # 记录已处理的链接，防止重复
         
         for item in analyzed_items:
-            # 检查是否已达到最大数量
             if generated_count >= max_generate:
                 print(f"  已达到最大点评数量限制 ({max_generate})，停止生成")
                 break
             
+            news = item.get('news')
+            news_link = getattr(news, 'link', '') if news else ''
+            
+            # 去重检查：是否已处理过
+            if news_link in processed_links:
+                print(f"  [跳过] 已处理过: {getattr(news, 'title', 'N/A')[:40]}...")
+                continue
+            
+            # 再次检查是否已推送
+            if self.storage.is_news_pushed(news_link):
+                print(f"  [跳过] 已推送过: {getattr(news, 'title', 'N/A')[:40]}...")
+                skipped_count += 1
+                continue
+            
             analysis = item["deep_analysis"]
             sensitivity_info = item.get("sensitivity", {})
             
-            # 可信度检查
             credibility = analysis.credibility or {}
             credibility_level = credibility.get("level", "unknown")
             issues = credibility.get("issues", [])
             
-            # 如果可信度为 low，跳过该新闻
             if credibility_level == "low":
                 print(f"  [跳过] 可信度过低: {item['news'].title[:50]}...")
                 if issues:
@@ -298,7 +337,6 @@ class NewsPushPipeline:
                 skipped_count += 1
                 continue
             
-            # 生成点评
             print(f"  生成点评: {item['news'].title[:50]}...")
             
             # 如果可信度为 medium，添加警告标记
@@ -416,9 +454,10 @@ class NewsPushPipeline:
                     "versions": versions,
                     "sensitivity": sensitivity_info,
                     "images": images,
-                    "translated_title": translated_title  # 保存翻译后的标题
+                    "translated_title": translated_title
                 })
                 
+                processed_links.add(news_link)  # 记录已处理
                 generated_count += 1
         
         print(f"  生成 {len(commentaries)} 篇点评")
