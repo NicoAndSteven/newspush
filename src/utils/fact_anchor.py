@@ -56,9 +56,9 @@ class FactAnchorManager:
         """
         current_date = cls.get_current_date()
         
-        prompt = f"""【事实锚点 - 当前日期: {current_date}】
+        prompt = f"""当前日期: {current_date}
 
-以下事实经过验证，分析时必须遵循：
+以下人物职位信息已确认，分析时请使用：
 
 """
         
@@ -76,11 +76,7 @@ class FactAnchorManager:
                     prompt += f"  - {info['title']}: {info['name']} (自{info['since']}起任职)\n"
         
         prompt += f"""
-【重要规则】
-1. 以上人物职位信息为当前准确信息，分析时必须使用
-2. 如果新闻内容与上述事实矛盾，优先相信上述事实（可能新闻已过时）
-3. 对于不确定的职位信息，宁可只用人名，不要加可能错误的头衔
-4. 提及以上人物时，必须确认其当前职位状态
+注意：如果新闻内容与上述事实矛盾，请以上述事实为准（新闻可能已过时）。
 
 """
         

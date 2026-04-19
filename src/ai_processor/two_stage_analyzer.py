@@ -4,11 +4,17 @@
 阶段2: 生成 - 基于事实清单生成正文
 """
 import json
+import random
 from typing import Dict, List, Optional
 from datetime import datetime
 
-from ai_processor.deep_analyzer import DeepNewsAnalyzer, AnalysisDepth, DeepAnalysisResult
+from ai_processor.deep_analyzer import DeepNewsAnalyzer, AnalysisDepth, DeepAnalysisResult, get_random_temperature
 from utils.fact_anchor import get_fact_anchor_prompt
+
+
+def get_random_temperature_for_facts(min_temp: float = 0.3, max_temp: float = 0.5) -> float:
+    """生成用于事实核查的随机 temperature（较低，更准确）"""
+    return round(random.uniform(min_temp, max_temp), 2)
 
 
 class TwoStageAnalyzer:
@@ -56,62 +62,27 @@ class TwoStageAnalyzer:
         
         prompt = f"""{fact_anchor}
 
-【任务】作为事实核查员，请从以下新闻中提取纯事实信息。
-
 当前时间: {current_time}
+
+你是一位事实核查员，请从以下新闻中提取事实信息。
 
 新闻标题: {title}
 新闻内容: {content}
 
-请输出以下 JSON 格式的事实清单:
-{{
-    "basic_facts": {{
-        "event_date": "事件发生的具体日期（YYYY-MM-DD格式，不确定则标注'未明确'）",
-        "location": "事件发生的地点",
-        "key_figures": [
-            {{
-                "name": "人物姓名",
-                "title": "当前准确职位（必须对照事实锚点）",
-                "role_in_event": "在事件中的角色"
-            }}
-        ],
-        "main_event": "核心事件描述（1-2句话，只陈述事实）"
-    }},
-    "timeline": [
-        {{
-            "date": "时间点",
-            "event": "具体事件",
-            "source": "信息来源"
-        }}
-    ],
-    "claims_verification": [
-        {{
-            "claim": "新闻中的主张/说法",
-            "verified": true/false/null,
-            "evidence": "验证依据",
-            "confidence": "high/medium/low"
-        }}
-    ],
-    "sources": [
-        {{
-            "type": "官方/媒体/专家/匿名",
-            "name": "来源名称",
-            "credibility": "high/medium/low"
-        }}
-    ],
-    "conflicting_info": [
-        "发现的矛盾点或存疑信息"
-    ],
-    "notes": "其他重要说明"
-}}
+请返回 JSON 格式的事实清单：
+- basic_facts: 基本信息（event_date, location, key_figures, main_event）
+- timeline: 时间线（date, event, source）
+- claims_verification: 主张验证（claim, verified, evidence, confidence）
+- sources: 信息来源（type, name, credibility）
+- conflicting_info: 矛盾点
+- notes: 其他说明
 
-【要求】
+要求：
 1. 只输出可验证的事实，不输出观点
-2. 所有日期、人名、职位必须准确（对照事实锚点）
-3. 如果新闻内容与事实锚点矛盾，标注矛盾并优先采信事实锚点
-4. 不确定的信息标注"存疑"，不要猜测
-5. 时间线按时间顺序排列
-"""
+2. 不确定的信息标注"存疑"
+3. 时间线按时间顺序排列
+
+请直接输出 JSON 结果："""
         
         try:
             # 使用轻量级调用获取事实
@@ -120,7 +91,7 @@ class TwoStageAnalyzer:
             response = self.analyzer.client.chat.completions.create(
                 model="qwen3.6-flash",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,  # 低温度，更确定性的输出
+                temperature=get_random_temperature_for_facts(0.3, 0.5),
                 extra_body=extra_body
             )
             
@@ -147,27 +118,9 @@ class TwoStageAnalyzer:
             AnalysisDepth.DEEP: "提供深度分析"
         }
         
-        prompt = f"""【重要】当前时间: {current_time}
+        prompt = f"""当前时间: {current_time}
 
-【风格要求】
-参考《纽约时报》评论或《经济学人》分析风格：
-- 专业、克制、平衡
-- 多数据支撑，少用抽象形容词
-- 避免戏剧化比喻
-- 避免"深刻洞见""十字路口""历史转折"等模板句式
-- 多用具体事实说话
-
-【平衡性要求】
-- 对于政治/宗教等敏感话题，必须呈现至少两方合理逻辑
-- 不要只呈现单一视角
-- 标注不同观点的信息来源
-
-【反AI味指令】
-- 禁止使用"值得注意的是""令人深思的是""无疑"等套话
-- 禁止使用过多的形容词堆砌
-- 每个论点必须有具体事实或数据支撑
-
-【任务】基于以下已核实的事实清单，生成{depth_prompt[depth]}。
+你是一位资深新闻评论员，请基于以下已核实的事实清单进行深度分析。
 
 原始新闻标题: {title}
 原始新闻内容: {content}
@@ -175,35 +128,41 @@ class TwoStageAnalyzer:
 【已核实的事实清单】
 {facts_text}
 
-【要求】
-1. 必须基于上述事实清单，不要添加未核实信息
-2. 如果事实清单中有"存疑"或"矛盾"标注，在分析中明确指出
-3. 遵循风格要求，写出专业、克制的分析
-4. 确保平衡性，呈现多方观点
+请返回 JSON 格式的分析结果，包含以下字段：
+- summary: 导语（一句话核心事实）
+- content_type: 内容类型（breaking/tech/finance/sports/entertainment/politics）
+- importance_level: 重要性（critical/important/normal）
+- key_points: 3-5个核心要点
+- background: 背景信息
+- impact_analysis: 影响分析
+- future_outlook: 未来展望
+- unique_angle: 独特视角
+- controversial_aspects: 争议点
+- expert_opinion: 专家点评
+- commentary: 完整的新闻点评文章
+- tags: 标签列表
+- sentiment: 情感倾向
+- urgency_level: 紧急程度1-10
+- credibility: 可信度评估
 
-请按以下 JSON 格式返回:
-{{
-    "summary": "导语（一句话，包含核心事实）",
-    "content_type": "breaking/tech/finance/social/politics",
-    "importance_level": "重要性等级：critical（重大事件）/important（重要新闻）/normal（普通新闻）",
-    "key_points": ["3-5个核心要点，每个必须有数据支撑"],
-    "background": "背景（聚焦当前，历史脉络点到为止）",
-    "impact_analysis": "影响分析（具体，含连锁反应）",
-    "future_outlook": "展望（最可能+最坏场景）",
-    "unique_angle": "独特视角（具体、有新意）",
-    "controversial_aspects": ["争议点（呈现多方逻辑）"],
-    "expert_opinion": "专家点评（专业克制风格）",
-    "commentary": "根据重要性等级生成点评文章（critical:2000-3000字深度分析，important:800-1500字标准分析，normal:200-400字简洁概括）",
-    "tags": ["5-8个标签"],
-    "sentiment": "positive/negative/neutral/mixed",
-    "urgency_level": 1-10,
-    "credibility": {{
-        "level": "high/medium/low",
-        "issues": ["事实清单中标注的矛盾点"],
-        "notes": "基于已核实事实"
-    }}
-}}
-"""
+【点评文章字数规则】
+- critical（重大事件）：800-1500字
+- important（重要新闻）：600-1000字
+- normal（普通新闻）：200-400字
+
+【写作要求】
+1. 必须基于事实清单，不要添加未核实信息
+2. 像专业记者写新闻稿一样，简洁有力
+3. 直接表达观点，不要铺垫
+4. 有结论就直接说，不要用"可能""也许"
+
+【绝对禁止的表达】
+- 结尾套话："可能的场景是""未来可能会""值得关注的是""让我们拭目以待"
+- 官腔："这表明""这说明""不难看出""值得注意的是"
+- 模板结构："首先、其次、最后""一方面、另一方面"
+- 空洞套话："引发了广泛关注""具有重要影响""具有里程碑意义"
+
+请直接输出 JSON 结果："""
         
         try:
             extra_body = {"enable_search": True} if self.analyzer.enable_search else {}
@@ -211,7 +170,7 @@ class TwoStageAnalyzer:
             response = self.analyzer.client.chat.completions.create(
                 model="qwen3.6-flash",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
+                temperature=get_random_temperature(0.7, 1.0),
                 extra_body=extra_body
             )
             

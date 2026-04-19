@@ -1,5 +1,6 @@
 import os
 import json
+import random
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -7,9 +8,15 @@ from datetime import datetime
 import time
 import httpx
 
+
+def get_random_temperature(min_temp: float = 0.7, max_temp: float = 1.0) -> float:
+    """生成随机 temperature，让输出更多样化"""
+    return round(random.uniform(min_temp, max_temp), 2)
+
+
 class AnalysisDepth(Enum):
-    LIGHT = "light"           # 简要分析
-    STANDARD = "standard"     # 标准分析
+    LIGHT = "light"
+    STANDARD = "standard"
     DEEP = "deep"             # 深度分析
 
 class ContentType(Enum):
@@ -171,153 +178,59 @@ class DeepNewsAnalyzer:
             AnalysisDepth.DEEP: "提供深度分析，挖掘背后逻辑、多角度观点、未来趋势"
         }
         
-        prompt = f"""【重要提示】当前时间是 {current_time}。请基于此时间点进行分析。
+        prompt = f"""【重要提示】当前时间是 {current_time}。
 
-【核心原则：具体、准确、有深度】
-1. **具体性优先**：分析必须包含具体的事实细节（时间、地点、人物、数据），避免泛泛而谈
-2. **称谓使用**：
-   - 新闻原文中出现的人名和职位，应如实引用（如"黎巴嫩总统Aoun"、"以色列总理Netanyahu"）
-   - 对于原文中模糊提及的实体（如"the group"），应结合上下文明确指出（如"普遍认为指真主党Hezbollah"）
-   - 不要刻意回避人名或用"某人物""某组织"替代，这会降低文章信息量
-3. **事实与观点分离**：
-   - 核心要点和事实清单必须基于新闻原文
-   - 背景分析和专家点评可以补充合理的背景知识，但需注明"根据公开信息"
-   - 对于可能随时间变化的信息，使用"根据报道""截至当前"等限定语
-4. **信息密度**：每段话都应有实质内容，避免"正确但空洞"的表述
-5. **时效性优先**：背景分析应聚焦当前局势（最近1-2年），历史脉络点到为止，不要过度追溯久远历史
-6. **风险分析尖锐化**：分析潜在风险时，要具体说明升级路径、连锁反应、最坏场景，而非泛泛而谈
-
-请对以下新闻进行{depth_prompt[depth]}：
+你是一位资深新闻评论员，请对以下新闻进行深度分析并撰写点评文章。
 
 标题：{title}
 内容：{content}
 
-请按以下 JSON 格式返回深度分析结果：
-{{
-    "core_facts": {{
-        "when": "事件发生的时间（具体日期，非模糊表述）",
-        "where": "事件发生的地点",
-        "who": ["关键人物及其身份（姓名+职位，如'黎巴嫩总统Joseph Aoun'）"],
-        "what": "核心事件是什么（1-2句话，包含具体细节）",
-        "key_disputes": ["各方的核心分歧点（具体而非抽象）"]
-    }},
-    
-    "summary": "一句话总结新闻核心（包含具体人物和事件，作为文章导语）",
-    "content_type": "内容类型：breaking突发/tech科技/finance财经/social社会/entertainment娱乐/politics政治/lifestyle生活",
-    
-    "importance_level": "重要性等级：critical（重大事件，如战争、灾难、重大政策）/important（重要新闻，如经济数据、外交动态）/normal（普通新闻，如日常社会事件）",
-    
-    "key_points": ["3-5个核心要点（每个要点必须包含具体事实，不能只是抽象概括）"],
-    "background": "事件背景（聚焦当前局势和最近发展，历史脉络简要点明即可）",
-    "impact_analysis": "影响分析（具体说明对哪些方面有影响，用数据或案例支撑，包括潜在连锁反应）",
-    "future_outlook": "未来趋势预测（基于当前局势的具体预判，包括最可能和最坏两种场景）",
-    
-    "unique_angle": "独特的切入角度或观点（必须是具体的、有新意的，而非老生常谈）",
-    "controversial_aspects": ["争议点（具体说明各方立场和分歧原因，包括潜在升级风险）"],
-    "expert_opinion": "专家视角点评（结合具体事实进行深度分析，避免空洞的'弱国无外交'式套话）",
-    
-    "commentary": "根据新闻重要性生成点评文章（见下方篇幅和风格要求）",
-    
-    "platform_contents": {{
-        "wechat": "适合微信公众号的长文点评（800-1500字，包含具体事实和深度分析）",
-        "xiaohongshu": "适合小红书的短文案（300-500字，带emoji，口语化）",
-        "weibo": "适合微博的短评（200-300字，带话题标签）",
-        "zhihu": "适合知乎的深度分析（1000-2000字，结构化，有数据支撑）",
-        "douyin": "适合抖音口播的文案（30-60秒，口语化，钩子开头）"
-    }},
-    
-    "tags": ["5-8个标签"],
-    "sentiment": "情感倾向：positive/negative/neutral/mixed",
-    "urgency_level": "紧急程度 1-10",
-    "target_audience": ["目标受众群体"],
-    "suggested_platforms": ["推荐推送的平台"],
-    
-    "is_video_worthy": true/false,
-    "video_hooks": ["3个视频开头钩子"],
-    
-    "credibility": {{
-        "level": "high/medium/low",
-        "issues": ["发现的事实问题"],
-        "notes": "可信度说明"
-    }}
-}}
+请返回 JSON 格式的分析结果，包含以下字段：
+- summary: 一句话新闻摘要
+- content_type: 内容类型（breaking/tech/finance/sports/entertainment/politics/lifestyle）
+- importance_level: 重要性（critical/important/normal）
+- key_points: 3-5个核心要点
+- background: 背景信息
+- impact_analysis: 影响分析
+- future_outlook: 未来展望
+- unique_angle: 独特视角
+- controversial_aspects: 争议点
+- expert_opinion: 专家点评
+- commentary: 完整的新闻点评文章
+- tags: 标签列表
+- sentiment: 情感倾向
+- urgency_level: 紧急程度1-10
+- credibility: 可信度评估
 
-【点评文章的篇幅和风格要求】
+【点评文章写作要求】
 
-**按新闻类型决定篇幅和风格**：
+**字数规则**：
+- 娱乐/体育新闻：200-400字，轻松有趣
+- 科技/财经新闻：600-1000字，深度解读
+- 时政/突发新闻：400-600字，客观准确
+- 一般新闻：400-600字
 
-1. **娱乐新闻**（entertainment/lifestyle）：
-   - 篇幅：200-400字，简洁轻快
-   - 风格：像朋友聊天一样，轻松有趣
-   - 内容：事件经过 + 明星动态 + 有趣细节
-   - 不要深度分析，不要严肃评论，直接报道就好
-   
-2. **体育新闻**（sports）：
-   - 篇幅：300-500字，赛事报道风格
-   - 风格：专业但热情，像体育解说
-   - 内容：比赛结果 + 关键时刻 + 球员表现
-   - 聚焦赛事本身，简洁有力
-   
-3. **科技新闻**（tech）：
-   - 篇幅：600-1000字，深度技术解读
-   - 风格：专业易懂，解释技术价值
-   - 内容：技术突破 + 产品亮点 + 行业影响 + 未来趋势
-   - 可以适度追溯技术发展脉络，让普通人看懂
-   
-4. **财经新闻**（finance）：
-   - 篇幅：600-1000字，深度财经解读
-   - 风格：专业严谨，数据说话
-   - 内容：核心数据 + 市场影响 + 投资启示 + 行业趋势
-   - 可以适度引用历史案例
-   
-5. **时政新闻**（politics）：
-   - 篇幅：300-500字，客观简洁
-   - 风格：客观呈现，不过度解读
-   - 内容：核心事实 + 主要立场 + 直接影响
-   - 避免主观评论和过多历史背景
-   
-6. **突发新闻**（breaking）：
-   - 篇幅：400-600字，快速准确
-   - 风格：信息优先，简洁有力
-   - 内容：核心事实 + 最新进展 + 直接影响
-   - 避免过度分析和背景追溯
-   
-7. **严肃事件**（战争/灾难/伤亡）：
-   - 篇幅：400-600字，客观严谨
-   - 风格：尊重事实，不过度分析
-   - 内容：核心事实 + 直接影响 + 后续关注
-   - 体现对事件的尊重，避免猜测
-   
-8. **一般新闻**（其他）：
-   - 篇幅：400-600字，标准报道
-   - 风格：专业平易，有观点但不夸张
-   - 内容：核心事实 + 背景补充 + 简要分析
-
-**通用禁止事项**：
-- 不要用括号补充说明
-- 不要用"值得注意的是""需要指出的是"等官腔
-- 不要用"首先、其次、最后"等模板结构
-- 不要用"这一事件标志着""具有里程碑意义"等套话
-- 不要用"某国""某组织""某人物"等模糊表述
-
-**严格禁止的模板化表达**：
-1. 禁止结尾套话："可能的场景是""未来可能会""值得关注的是""让我们拭目以待"
-2. 禁止官腔："这表明""这说明""不难看出""不难发现"
-3. 禁止模板结构："一方面、另一方面""从...角度来看"
-4. 禁止空洞套话："引发了广泛关注""具有重要影响""影响深远"
-
-**正确的写法**：
+**写作风格**：
+- 像专业记者写新闻稿一样，简洁有力
 - 直接表达观点，不要铺垫
 - 有结论就直接说，不要用"可能""也许"
-- 结尾要自然收束，不要强行升华
-- 像专业记者写新闻稿一样，简洁有力
+- 结尾自然收束，不要强行升华
 
-要求：
-1. **具体性**：每个字段都必须包含具体信息
-2. **准确性**：人名、地名、数据等必须准确，不确定的加限定语
-3. **信息密度**：每段话都有实质内容
-4. **时效性**：背景分析聚焦当前局势，历史脉络点到为止
-"""
+**绝对禁止的表达**（会让文章显得机械、模板化）：
+1. 禁止结尾套话："可能的场景是""未来可能会""值得关注的是""让我们拭目以待""时间会给出答案"
+2. 禁止官腔："这表明""这说明""不难看出""不难发现""值得注意的是"
+3. 禁止模板结构："首先、其次、最后""一方面、另一方面""从...角度来看"
+4. 禁止空洞套话："引发了广泛关注""具有重要影响""影响深远""具有里程碑意义"
+5. 禁止括号补充说明
+6. 禁止"某国""某组织""某人物"等模糊表述
+
+【核心原则】
+1. 具体性：包含具体事实细节（时间、地点、人物、数据）
+2. 准确性：人名、地名、数据必须准确
+3. 信息密度：每段话都有实质内容
+4. 自然流畅：像真人写作一样，有变化、有节奏
+
+现在请开始分析，直接输出 JSON 结果："""
         
         try:
             max_retries = 5  # 增加重试次数
@@ -332,7 +245,7 @@ class DeepNewsAnalyzer:
                         response = self.client.chat.completions.create(
                             model=self.model,
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.8
+                            temperature=get_random_temperature(0.7, 1.0)
                         )
                         result_text = response.choices[0].message.content
                     elif self.provider == "anthropic":
@@ -351,7 +264,7 @@ class DeepNewsAnalyzer:
                         response = self.client.chat.completions.create(
                             model=self.model,
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.8,
+                            temperature=get_random_temperature(0.7, 1.0),
                             extra_body=extra_body
                         )
                         result_text = response.choices[0].message.content
@@ -475,7 +388,7 @@ class DeepNewsAnalyzer:
                 response = self.client.chat.completions.create(
                     model="gpt-4",
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
+                    temperature=get_random_temperature(0.7, 1.0)
                 )
                 result_text = response.choices[0].message.content
             elif self.provider == "anthropic":
@@ -513,82 +426,45 @@ class CommentaryGenerator:
         type_config = {
             "entertainment": {
                 "min": 200, "max": 400,
-                "style": "轻松有趣，像朋友聊天",
+                "style": "轻松有趣",
                 "focus": "事件经过 + 明星动态 + 有趣细节",
-                "style_guide": """【风格：轻松有趣】
-像聪明朋友在聊天一样讲述：
-- 轻松幽默但不低俗
-- 直接报道事件，不要深度分析
-- 可以适当调侃
-- 让人读起来轻松愉快"""
+                "style_guide": "像朋友聊天一样讲述，轻松幽默但不低俗，直接报道事件，不要深度分析。"
             },
             "lifestyle": {
                 "min": 200, "max": 400,
-                "style": "轻松有趣，像朋友聊天",
+                "style": "轻松有趣",
                 "focus": "事件经过 + 有趣细节",
-                "style_guide": """【风格：轻松有趣】
-像聪明朋友在聊天一样讲述：
-- 轻松幽默但不低俗
-- 直接报道事件，不要深度分析
-- 让人读起来轻松愉快"""
+                "style_guide": "像朋友聊天一样讲述，轻松幽默但不低俗，直接报道事件。"
             },
             "sports": {
                 "min": 300, "max": 500,
-                "style": "专业热情，像体育解说",
+                "style": "专业热情",
                 "focus": "比赛结果 + 关键时刻 + 球员表现",
-                "style_guide": """【风格：体育解说】
-像体育解说员一样热情专业：
-- 聚焦赛事本身，简洁有力
-- 突出关键时刻和精彩表现
-- 专业但易懂
-- 不要过度分析背景"""
+                "style_guide": "像体育解说员一样热情专业，聚焦赛事本身，简洁有力，不要过度分析背景。"
             },
             "tech": {
                 "min": 600, "max": 1000,
-                "style": "专业易懂，技术解读",
+                "style": "专业易懂",
                 "focus": "技术突破 + 产品亮点 + 行业影响 + 未来趋势",
-                "style_guide": """【风格：技术解读】
-深度解读技术新闻：
-- 解释技术是什么、为什么重要
-- 用通俗语言解释专业概念
-- 分析技术价值和行业影响
-- 展望未来发展趋势
-- 可以适度追溯技术发展脉络"""
+                "style_guide": "深度解读技术新闻，用通俗语言解释专业概念，分析技术价值和行业影响，可以适度追溯技术发展脉络。"
             },
             "finance": {
                 "min": 600, "max": 1000,
-                "style": "专业严谨，数据说话",
+                "style": "专业严谨",
                 "focus": "核心数据 + 市场影响 + 投资启示 + 行业趋势",
-                "style_guide": """【风格：财经解读】
-深度解读财经新闻：
-- 数据说话，聚焦关键信息
-- 分析市场影响和投资启示
-- 探讨行业趋势和未来走向
-- 语言严谨但不晦涩
-- 可以适度引用历史案例"""
+                "style_guide": "数据说话，聚焦关键信息，分析市场影响和投资启示，语言严谨但不晦涩。"
             },
             "politics": {
                 "min": 300, "max": 500,
-                "style": "客观简洁，事实报道",
+                "style": "客观简洁",
                 "focus": "核心事实 + 主要立场 + 直接影响",
-                "style_guide": """【风格：客观简洁】
-简洁客观的政治报道：
-- 聚焦核心事实，不过度解读
-- 客观呈现各方立场
-- 说明直接影响即可
-- 避免主观评论和猜测
-- 不要追溯过多历史背景"""
+                "style_guide": "客观呈现，不过度解读，说明直接影响即可，避免主观评论和过多历史背景。"
             },
             "breaking": {
                 "min": 400, "max": 600,
-                "style": "快速准确，信息优先",
+                "style": "快速准确",
                 "focus": "核心事实 + 最新进展 + 直接影响",
-                "style_guide": """【风格：突发新闻】
-快速传递核心信息：
-- 聚焦事实，信息密度高
-- 简洁有力，不拖泥带水
-- 说明最新进展和直接影响
-- 避免过度分析和背景追溯"""
+                "style_guide": "信息优先，简洁有力，说明最新进展和直接影响，避免过度分析和背景追溯。"
             }
         }
         
@@ -604,13 +480,7 @@ class CommentaryGenerator:
                 "min": 400, "max": 600,
                 "style": "客观严谨",
                 "focus": "核心事实 + 直接影响 + 后续关注",
-                "style_guide": """【风格：客观严谨】
-客观报道严肃事件：
-- 聚焦事实，不过度分析
-- 客观呈现事件经过
-- 说明直接影响
-- 体现对事件的尊重
-- 避免猜测和主观评论"""
+                "style_guide": "客观报道严肃事件，聚焦事实，不过度分析，体现对事件的尊重，避免猜测和主观评论。"
             }
         elif content_type in type_config:
             config = type_config[content_type]
@@ -619,66 +489,39 @@ class CommentaryGenerator:
                 "min": 400, "max": 600,
                 "style": "专业平易",
                 "focus": "核心事实 + 背景补充 + 简要分析",
-                "style_guide": """【风格：专业平易】
-专业但平易近人的报道：
-- 可以适度比喻帮助理解
-- 保持客观但有观点
-- 避免过度娱乐化
-- 语言简洁有力"""
+                "style_guide": "专业但平易近人的报道，可以适度比喻帮助理解，保持客观但有观点，语言简洁有力。"
             }
         
-        prompt = f"""请基于以下分析，写一篇新闻点评文章：
+        prompt = f"""你是一位资深新闻评论员，请根据以下分析撰写一篇新闻点评文章。
 
 新闻标题：{analysis.title}
 内容类型：{content_type}
 字数要求：{config['min']}-{config['max']}字
-核心要点：{', '.join(analysis.key_points[:3])}
-背景：{analysis.background}
-影响分析：{analysis.impact_analysis}
-独特角度：{analysis.unique_angle}
-争议点：{', '.join(analysis.controversial_aspects)}
+
+关键信息：
+- 核心要点：{', '.join(analysis.key_points[:3])}
+- 背景：{analysis.background}
+- 影响：{analysis.impact_analysis}
+- 独特角度：{analysis.unique_angle}
 
 {config['style_guide']}
 
-【写作规范】
-1. **结构自然流畅**：不要用"核心事实""深度分析"等生硬小标题
-2. **事实必须准确**：核心信息不能编造
-3. **直接点名**：不要用"某国""某组织""某人物"等模糊表述
-4. **信息密度**：每段话都有实质内容
+【写作核心要求】
+1. 像专业记者写新闻稿一样，简洁有力
+2. 直接表达观点，不要铺垫
+3. 有结论就直接说，不要用"可能""也许"
+4. 结尾自然收束，不要强行升华
+5. 每段话都有实质内容
 
-【严格禁止的模板化表达】
-以下表达方式严格禁止，会让文章显得机械、模板化：
+【绝对禁止的表达】
+- 结尾套话："可能的场景是""未来可能会""值得关注的是""让我们拭目以待""时间会给出答案"
+- 官腔："这表明""这说明""不难看出""不难发现""值得注意的是"
+- 模板结构："首先、其次、最后""一方面、另一方面""从...角度来看"
+- 空洞套话："引发了广泛关注""具有重要影响""影响深远""具有里程碑意义"
+- 括号补充说明
+- "某国""某组织""某人物"等模糊表述
 
-1. 禁止结尾套话：
-   - "可能的场景是..."
-   - "未来可能会..."
-   - "值得关注的是..."
-   - "这一事件的影响将持续..."
-   - "让我们拭目以待..."
-   - "时间会给出答案..."
-
-2. 禁止官腔：
-   - "值得注意的是""需要指出的是"
-   - "这表明""这说明"
-   - "不难看出""不难发现"
-
-3. 禁止模板结构：
-   - "首先、其次、最后"
-   - "一方面、另一方面"
-   - "从...角度来看"
-
-4. 禁止空洞套话：
-   - "这一事件标志着""具有里程碑意义"
-   - "引发了广泛关注""引起了热议"
-   - "具有重要意义""影响深远"
-
-【正确的写法】
-- 直接表达观点，不要铺垫
-- 有结论就直接说，不要用"可能""也许"
-- 结尾要自然收束，不要强行升华
-- 像专业记者写新闻稿一样，简洁有力
-
-现在请开始写，直接输出文章正文，不要有任何前言或解释："""
+请直接输出文章正文，不要有任何前言或解释："""
         
         try:
             max_retries = 5  # 增加重试次数
@@ -692,7 +535,7 @@ class CommentaryGenerator:
                         response = self.analyzer.client.chat.completions.create(
                             model=self.analyzer.model,
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.8
+                            temperature=get_random_temperature(0.7, 1.0)
                         )
                         print(f"    [API] 点评生成成功")
                         return response.choices[0].message.content
@@ -712,7 +555,7 @@ class CommentaryGenerator:
                         response = self.analyzer.client.chat.completions.create(
                             model=self.analyzer.model,
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.8,
+                            temperature=get_random_temperature(0.7, 1.0),
                             extra_body=extra_body
                         )
                         print(f"    [API] 点评生成成功")
@@ -764,7 +607,7 @@ class CommentaryGenerator:
                 response = self.analyzer.client.chat.completions.create(
                     model="gpt-4",
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.8
+                    temperature=get_random_temperature(0.7, 1.0)
                 )
                 result_text = response.choices[0].message.content
             elif self.analyzer.provider == "anthropic":
@@ -783,7 +626,7 @@ class CommentaryGenerator:
                 response = self.analyzer.client.chat.completions.create(
                     model="qwen3.6-flash",
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.8,
+                    temperature=get_random_temperature(0.7, 1.0),
                     extra_body=extra_body
                 )
                 result_text = response.choices[0].message.content

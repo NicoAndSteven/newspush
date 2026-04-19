@@ -3,7 +3,14 @@
 将英文新闻标题翻译为中文
 """
 import os
+import random
 from typing import Optional
+
+
+def get_random_temperature_for_translation(min_temp: float = 0.2, max_temp: float = 0.4) -> float:
+    """生成用于翻译的随机 temperature（较低，确保准确性）"""
+    return round(random.uniform(min_temp, max_temp), 2)
+
 
 # 尝试导入 Google 翻译（备用）
 try:
@@ -134,7 +141,7 @@ def _translate_with_dashscope(text: str, target_lang: str = "zh-CN") -> Optional
         response = client.chat.completions.create(
             model="qwen3.6-flash",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
+            temperature=get_random_temperature_for_translation()
         )
         
         result = response.choices[0].message.content.strip()
