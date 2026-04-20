@@ -148,7 +148,7 @@ class DeepNewsAnalyzer:
                     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
                     timeout=httpx.Timeout(120.0, connect=60.0)
                 )
-                self.model = self.model or "qwen3.6-flash"
+                self.model = self.model or "qwen3.6-35b-a3b"
                 print(f"  [DEBUG] 阿里云百炼客户端初始化成功，模型: {self.model}")
             except ImportError as e:
                 print(f"  [错误] OpenAI package 未安装: {e}")
@@ -634,7 +634,7 @@ class CommentaryGenerator:
                     extra_body["enable_search"] = True
                 
                 response = self.analyzer.client.chat.completions.create(
-                    model="qwen3.6-flash",
+                    model="qwen3.6-35b-a3b",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=get_random_temperature(0.7, 1.0),
                     extra_body=extra_body
