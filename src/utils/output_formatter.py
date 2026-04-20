@@ -120,7 +120,7 @@ class OutputFormatter:
 - **情感倾向**: {stage2_analysis.get('sentiment', '') or ''}
 - **紧急程度**: {stage2_analysis.get('urgency_level', 5) or 5}/10
 - **标签**: {', '.join(stage2_analysis.get('tags', []) or [])}
-- **可信度**: {(stage2_analysis.get('credibility') or {}).get('level', 'unknown')}
+- **可信度**: {((stage2_analysis.get('credibility') if isinstance(stage2_analysis.get('credibility'), dict) else {'level': stage2_analysis.get('credibility', 'unknown')}) or {}).get('level', 'unknown')}
 
 ---
 
