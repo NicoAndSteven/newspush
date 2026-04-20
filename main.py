@@ -350,8 +350,10 @@ class NewsPushPipeline:
             sensitivity_info = item.get("sensitivity", {})
             
             credibility = analysis.credibility or {}
-            credibility_level = credibility.get("level", "unknown")
-            issues = credibility.get("issues", [])
+            if isinstance(credibility, str):
+                credibility = {"level": credibility, "issues": []}
+            credibility_level = credibility.get("level", "unknown") if isinstance(credibility, dict) else "unknown"
+            issues = credibility.get("issues", []) if isinstance(credibility, dict) else []
             
             if credibility_level == "low":
                 print(f"  [跳过] 可信度过低: {item['news'].title[:50]}...")
