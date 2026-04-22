@@ -89,7 +89,7 @@ class TwoStageAnalyzer:
             extra_body = {"enable_search": True} if self.analyzer.enable_search else {}
             
             response = self.analyzer.client.chat.completions.create(
-                model="qwen3.6-35b-a3b",
+                model="qwen3.6-max-preview",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=get_random_temperature_for_facts(0.3, 0.5),
                 extra_body=extra_body
@@ -178,7 +178,7 @@ class TwoStageAnalyzer:
             extra_body = {"enable_search": True} if self.analyzer.enable_search else {}
             
             response = self.analyzer.client.chat.completions.create(
-                model="qwen3.6-35b-a3b",
+                model="qwen3.6-max-preview",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=get_random_temperature(0.7, 1.0),
                 extra_body=extra_body
